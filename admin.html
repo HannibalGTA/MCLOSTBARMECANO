@@ -46,7 +46,11 @@
           </div>
         </div>
 
-        <label for="item-stock">Stock actuel</label>
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:0.85rem;margin-bottom:14px;">
+          <input type="checkbox" id="item-track-stock" style="width:auto;margin:0;" checked /> Suivre le stock (décoche pour une prestation sans stock, ex : vidange, main d'œuvre)
+        </label>
+
+        <label for="item-stock" id="item-stock-label">Stock actuel</label>
         <input type="number" id="item-stock" min="0" step="1" required />
 
         <label for="item-image">Image (PNG, redimensionnée automatiquement)</label>
@@ -163,12 +167,33 @@
     document.getElementById("item-form").reset();
     document.getElementById("item-id").value = "";
     document.getElementById("item-active").checked = true;
+    document.getElementById("item-track-stock").checked = true;
+    applyTrackStockUI(true);
     document.getElementById("image-preview-box").innerHTML = "";
     document.getElementById("cancel-edit").style.display = "none";
     document.getElementById("form-error").textContent = "";
   }
 
   document.getElementById("cancel-edit").addEventListener("click", resetForm);
+
+  document.getElementById("item-track-stock").addEventListener("change", (e) => {
+    applyTrackStockUI(e.target.checked);
+  });
+
+  function applyTrackStockUI(tracked) {
+    const stockInput = document.getElementById("item-stock");
+    const stockLabel = document.getElementById("item-stock-label");
+    if (tracked) {
+      stockInput.disabled = false;
+      stockInput.required = true;
+      stockLabel.textContent = "Stock actuel";
+    } else {
+      stockInput.disabled = true;
+      stockInput.required = false;
+      stockInput.value = 0;
+      stockLabel.textContent = "Stock actuel (non applicable — prestation sans stock)";
+    }
+  }
 
   document.getElementById("item-image").addEventListener("change", async (e) => {
     const file = e.target.files[0];
@@ -190,7 +215,8 @@
     const name = document.getElementById("item-name").value.trim();
     const buy = parseFloat(document.getElementById("item-buy").value);
     const sell = parseFloat(document.getElementById("item-sell").value);
-    const stock = parseInt(document.getElementById("item-stock").value, 10);
+    const trackStock = document.getElementById("item-track-stock").checked;
+    const stock = trackStock ? parseInt(document.getElementById("item-stock").value, 10) : 0;
     const active = document.getElementById("item-active").checked;
 
     if (sell < buy) {
@@ -203,6 +229,7 @@
       buy_price: buy,
       sell_price: sell,
       stock,
+      track_stock: trackStock,
       active,
     };
     if (editingId) payload.id = editingId;
@@ -232,7 +259,7 @@
         <td>${escapeHtml(item.name)} ${!item.active ? '<span class="badge muted" style="border:1px solid #444;">inactif</span>' : ""}</td>
         <td class="num">${formatUSD(item.buy_price)}</td>
         <td class="num">${formatUSD(item.sell_price)}</td>
-        <td class="num">${item.stock}</td>
+        <td class="num">${item.track_stock ? item.stock : '<span class="muted">Illimité</span>'}</td>
         <td>
           <button class="btn-ghost btn-sm" data-action="edit" data-id="${item.id}">Modifier</button>
           <button class="btn-danger btn-sm" data-action="delete" data-id="${item.id}">Supprimer</button>
@@ -259,6 +286,8 @@
     document.getElementById("item-buy").value = item.buy_price;
     document.getElementById("item-sell").value = item.sell_price;
     document.getElementById("item-stock").value = item.stock;
+    document.getElementById("item-track-stock").checked = item.track_stock;
+    applyTrackStockUI(item.track_stock);
     document.getElementById("item-active").checked = item.active;
     currentImageDataUrl = item.image_data || null;
     document.getElementById("image-preview-box").innerHTML = item.image_data
