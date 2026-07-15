@@ -74,9 +74,19 @@
   let marginsBySeller = {}; // normalizedKey -> margin
   let percentagesBySeller = {}; // normalizedKey -> percentage
   let displayNameByKey = {}; // normalizedKey -> nom tel qu'il apparaît le plus souvent
+  let existingPaymentsBySeller = {}; // normalizedKey -> [payments déjà versés pour ce service]
 
   function normalizeSellerKey(name) {
     return (name || "").trim().toLowerCase();
+  }
+
+  // Deux périodes se chevauchent-elles ? (null = borne ouverte, "depuis toujours" / "jusqu'à maintenant")
+  function periodsOverlap(aFrom, aTo, bFrom, bTo) {
+    const aStart = aFrom ? new Date(aFrom).getTime() : -Infinity;
+    const aEnd = aTo ? new Date(aTo).getTime() : Infinity;
+    const bStart = bFrom ? new Date(bFrom).getTime() : -Infinity;
+    const bEnd = bTo ? new Date(bTo).getTime() : Infinity;
+    return aStart <= bEnd && bStart <= aEnd;
   }
 
   async function init() {
@@ -113,14 +123,22 @@
     currentFrom = fromInput ? new Date(fromInput + "T00:00:00").toISOString() : null;
     currentTo = toInput ? new Date(toInput + "T23:59:59").toISOString() : null;
 
-    const [sales, percentageRows] = await Promise.all([
+    const [sales, percentageRows, existingPayments] = await Promise.all([
       listSales(currentDomain, { from: currentFrom, to: currentTo }),
       listSellerPercentages(currentDomain),
+      listSalaryPayments(currentDomain),
     ]);
 
     percentagesBySeller = {};
     for (const row of percentageRows) {
       percentagesBySeller[normalizeSellerKey(row.seller_name)] = row.percentage;
+    }
+
+    existingPaymentsBySeller = {};
+    for (const p of existingPayments) {
+      const key = normalizeSellerKey(p.seller_name);
+      existingPaymentsBySeller[key] = existingPaymentsBySeller[key] || [];
+      existingPaymentsBySeller[key].push(p);
     }
 
     marginsBySeller = {};
@@ -162,6 +180,11 @@
       const margin = marginsBySeller[key] || 0;
       const pct = percentagesBySeller[key] !== undefined ? percentagesBySeller[key] : 10;
       const salary = Math.round((margin * pct) / 100);
+
+      const overlapping = (existingPaymentsBySeller[key] || []).filter((p) =>
+        periodsOverlap(currentFrom, currentTo, p.period_from, p.period_to)
+      );
+
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${escapeHtml(seller)}</td>
@@ -172,6 +195,24 @@
         <td><button class="btn-primary btn-sm" data-action="pay" data-key="${escapeHtml(key)}" data-seller="${escapeHtml(seller)}" ${salary <= 0 ? "disabled" : ""}>Verser le salaire</button></td>
       `;
       tbody.appendChild(tr);
+
+      if (overlapping.length > 0) {
+        const infoTr = document.createElement("tr");
+        const details = overlapping
+          .map((p) => {
+            const period = p.period_from || p.period_to ? `du ${p.period_from ? formatDate(p.period_from) : "…"} au ${p.period_to ? formatDate(p.period_to) : "…"}` : "sur toute la période";
+            return `${formatUSD(p.amount)} versé le ${formatDateTime(p.paid_at)} (${period})`;
+          })
+          .join(" · ");
+        infoTr.innerHTML = `
+          <td colspan="6" style="padding-top:0;padding-bottom:12px;">
+            <div style="font-size:0.8rem;color:var(--brass);background:rgba(201,154,61,0.1);border:1px solid var(--brass);border-radius:4px;padding:6px 10px;">
+              ℹ️ Un salaire a déjà été versé à ${escapeHtml(seller)} sur une période qui chevauche celle sélectionnée : ${details}
+            </div>
+          </td>
+        `;
+        tbody.appendChild(infoTr);
+      }
     }
 
     tbody.querySelectorAll('[data-pct-input]').forEach((input) => {
@@ -222,9 +263,16 @@
     const domainLabel = currentDomain === "bar" ? "Bar" : "Mécano";
     const fromLabel = currentFrom ? formatDate(currentFrom) : "le début";
     const toLabel = currentTo ? formatDate(currentTo) : "aujourd'hui";
+
+    const overlapping = (existingPaymentsBySeller[key] || []).filter((p) => periodsOverlap(currentFrom, currentTo, p.period_from, p.period_to));
+    const warningLine =
+      overlapping.length > 0
+        ? ` ⚠ Attention : ${overlapping.length} versement(s) existent déjà pour ${displayName} sur une période qui chevauche celle-ci (total déjà versé : ${formatUSD(overlapping.reduce((s, p) => s + Number(p.amount), 0))}).`
+        : "";
+
     const confirmed = await confirmDialog(
       "Confirmer le versement",
-      `Verser ${formatUSD(salary)} à ${displayName} (${domainLabel}) pour la période du ${fromLabel} au ${toLabel} ? Cette somme sera enregistrée comme dépense dans le bilan ${domainLabel}.`
+      `Verser ${formatUSD(salary)} à ${displayName} (${domainLabel}) pour la période du ${fromLabel} au ${toLabel} ? Cette somme sera enregistrée comme dépense dans le bilan ${domainLabel}.${warningLine}`
     );
     if (!confirmed) return;
 
