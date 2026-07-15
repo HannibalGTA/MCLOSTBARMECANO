@@ -56,31 +56,49 @@ function resizeAndCenterImage(file, targetSize = 300) {
     const reader = new FileReader();
     reader.onload = (e) => {
       img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = targetSize;
-        canvas.height = targetSize;
-        const ctx = canvas.getContext("2d");
-        // fond transparent, image centrée en mode "contain"
-        const ratio = Math.min(targetSize / img.width, targetSize / img.height);
-        const w = img.width * ratio;
-        const h = img.height * ratio;
-        const x = (targetSize - w) / 2;
-        const y = (targetSize - h) / 2;
-        ctx.clearRect(0, 0, targetSize, targetSize);
-        ctx.drawImage(img, x, y, w, h);
-
-        // essaie plusieurs qualités JPEG pour rester sous la limite de poids
-        let quality = 0.92;
-        let dataUrl = canvas.toDataURL("image/png");
         const approxBytes = (str) => Math.ceil((str.length * 3) / 4);
 
+        const renderAt = (size) => {
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          const ratio = Math.min(size / img.width, size / img.height);
+          const w = img.width * ratio;
+          const h = img.height * ratio;
+          const x = (size - w) / 2;
+          const y = (size - h) / 2;
+          ctx.clearRect(0, 0, size, size);
+          ctx.drawImage(img, x, y, w, h);
+          return canvas;
+        };
+
+        let size = targetSize;
+        let canvas = renderAt(size);
+        let dataUrl = canvas.toDataURL("image/png");
+
+        // Etape 1 : si trop lourd en PNG, passe en JPEG et réduit la qualité progressivement
         if (approxBytes(dataUrl) > MAX_IMAGE_BYTES) {
-          // Passe en JPEG (transparence perdue mais fond neutre) pour réduire le poids
+          let quality = 0.92;
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+          while (approxBytes(dataUrl) > MAX_IMAGE_BYTES && quality > 0.35) {
+            quality -= 0.1;
+            dataUrl = canvas.toDataURL("image/jpeg", quality);
+          }
+        }
+
+        // Etape 2 : si toujours trop lourd, réduit aussi la taille du carré et refait l'étape 1
+        let attempts = 0;
+        while (approxBytes(dataUrl) > MAX_IMAGE_BYTES && attempts < 4 && size > 80) {
+          size = Math.round(size * 0.7);
+          canvas = renderAt(size);
+          let quality = 0.85;
           dataUrl = canvas.toDataURL("image/jpeg", quality);
           while (approxBytes(dataUrl) > MAX_IMAGE_BYTES && quality > 0.3) {
             quality -= 0.1;
             dataUrl = canvas.toDataURL("image/jpeg", quality);
           }
+          attempts++;
         }
 
         if (approxBytes(dataUrl) > MAX_IMAGE_BYTES) {
