@@ -3,78 +3,94 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Bilan Mécano — The Lost MC</title>
+<title>Caisse Mécano — The Lost MC</title>
 <link rel="stylesheet" href="assets/style.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 <nav class="topbar" id="app-nav"></nav>
 
 <div class="page-wrap">
-  <h1>Bilan comptable — Mécano</h1>
-  <p class="muted">Chiffre d'affaires, achats, marge et gestion du stock, avec détail par date.</p>
+  <h1>Caisse — Mécano</h1>
+  <p class="muted">Renseigne le client puis ajoute les pièces / prestations facturées.</p>
 
   <div class="card">
-    <div class="flex-between">
-      <div class="field-row" style="max-width:460px;">
-        <div>
-          <label for="filter-from">Du</label>
-          <input type="date" id="filter-from" />
-        </div>
-        <div>
-          <label for="filter-to">Au</label>
-          <input type="date" id="filter-to" />
-        </div>
+    <div class="card-title"><h2>Informations client / véhicule</h2></div>
+    <div class="grid-3">
+      <div>
+        <label for="client-name">Nom du client</label>
+        <input type="text" id="client-name" placeholder="Ex : John Doe" />
       </div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn-ghost" id="filter-reset">Réinitialiser</button>
-        <button class="btn-primary" id="filter-apply">Filtrer</button>
+      <div>
+        <label for="plate">Plaque d'immatriculation</label>
+        <input type="text" id="plate" placeholder="Ex : 12ABC34" />
+      </div>
+      <div>
+        <label for="vehicle-model">Modèle du véhicule</label>
+        <input type="text" id="vehicle-model" placeholder="Ex : Bravado Buffalo" />
       </div>
     </div>
+    <label>Date</label>
+    <input type="text" id="sale-date-display" disabled />
   </div>
 
-  <div class="grid-3">
-    <div class="stat-box"><div class="num" id="stat-revenue">$0.00</div><div class="label">Chiffre d'affaires</div></div>
-    <div class="stat-box"><div class="num" id="stat-cost">$0.00</div><div class="label">Total achats</div></div>
-    <div class="stat-box"><div class="num" id="stat-margin">$0.00</div><div class="label">Marge</div></div>
-  </div>
-  <div class="grid-2" style="margin-bottom:20px;">
-    <div class="stat-box"><div class="num" id="stat-sales-count">0</div><div class="label">Ventes sur la période</div></div>
-    <div class="stat-box"><div class="num" id="stat-stock-value">$0.00</div><div class="label">Valeur du stock actuel</div></div>
-  </div>
+  <div class="grid-2" style="grid-template-columns: 2fr 1fr; align-items:start;">
+    <div class="card">
+      <div class="card-title"><h2>Articles / prestations</h2></div>
+      <div class="item-grid" id="item-grid"></div>
+      <div class="empty-state" id="grid-empty" style="display:none;">Aucun article disponible. Demande au gestionnaire d'en créer.</div>
+    </div>
 
-  <div class="card">
-    <div class="card-title"><h2>Stock — Articles Mécano</h2></div>
-    <table>
-      <thead><tr><th>Article</th><th class="num">Stock</th><th class="num">Prix achat</th><th class="num">Prix vente</th><th class="num">Valeur stock</th></tr></thead>
-      <tbody id="stock-tbody"></tbody>
-    </table>
-  </div>
+    <div class="card">
+      <div class="card-title"><h2>Ticket</h2></div>
+      <div class="ticket" id="ticket">
+        <div class="empty-state" id="ticket-empty">Le ticket est vide.</div>
+      </div>
+      <div class="ticket-total"><span>Total</span><span id="ticket-total">$0.00</span></div>
+      <label for="sale-note" style="margin-top:14px;">Note (optionnel)</label>
+      <textarea id="sale-note" rows="2" placeholder="Détails de l'intervention..."></textarea>
 
-  <div class="card">
-    <div class="card-title"><h2>Ventes</h2></div>
-    <table>
-      <thead><tr><th>Date</th><th>Vendeur</th><th>Client / Véhicule</th><th class="num">Total</th><th></th></tr></thead>
-      <tbody id="sales-tbody"></tbody>
-    </table>
-    <div class="empty-state" id="sales-empty" style="display:none;">Aucune vente sur cette période.</div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><h2>Achats</h2></div>
-    <table>
-      <thead><tr><th>Date</th><th>Note</th><th class="num">Total</th><th></th></tr></thead>
-      <tbody id="purchases-tbody"></tbody>
-    </table>
-    <div class="empty-state" id="purchases-empty" style="display:none;">Aucun achat sur cette période.</div>
+      <button class="btn-secondary" id="preview-devis" style="width:100%;margin-bottom:10px;" disabled>Aperçu devis</button>
+      <button class="btn-primary" id="validate-sale" style="width:100%;" disabled>Enregistrer la facture</button>
+    </div>
   </div>
 </div>
 
-<div class="modal-backdrop" id="sale-modal" style="display:none;">
-  <div class="modal-box">
-    <div id="sale-modal-body"></div>
-    <div class="flex-between" style="margin-top:16px;">
-      <button class="btn-ghost" id="close-sale-modal">Fermer</button>
+<div class="modal-backdrop no-print" id="invoice-modal" style="display:none;">
+  <div class="modal-box" style="max-width:600px;">
+    <div class="invoice" id="invoice-content">
+      <div class="invoice-header">
+        <img src="assets/MCmecano.png" alt="The Lost MC Garage" />
+        <div>
+          <div class="biz-name">THE LOST MC GARAGE</div>
+          <div style="font-size:0.8rem;color:#555;">Repair &amp; Service</div>
+        </div>
+      </div>
+      <div class="invoice-meta">
+        <div>
+          <div><strong>Document :</strong> <span id="inv-doctype">Facture</span></div>
+          <div><strong>Date :</strong> <span id="inv-date"></span></div>
+        </div>
+        <div style="text-align:right;">
+          <div><strong>Client :</strong> <span id="inv-client"></span></div>
+          <div><strong>Véhicule :</strong> <span id="inv-vehicle"></span></div>
+          <div><strong>Plaque :</strong> <span id="inv-plate"></span></div>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Article</th><th class="num">Qté</th><th class="num">Prix</th><th class="num">Total</th></tr></thead>
+        <tbody id="inv-lines"></tbody>
+      </table>
+      <div class="invoice-total">Total : <span id="inv-total"></span></div>
+      <div id="inv-note" style="margin-top:12px;font-size:0.82rem;color:#555;"></div>
+    </div>
+    <div class="flex-between no-print" style="margin-top:18px;">
+      <button class="btn-ghost" id="close-invoice">Fermer</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-secondary" id="copy-invoice">Copier l'image</button>
+        <button class="btn-primary" id="print-invoice">Imprimer</button>
+      </div>
     </div>
   </div>
 </div>
@@ -83,9 +99,183 @@
 <script src="assets/auth.js"></script>
 <script src="assets/helpers.js"></script>
 <script src="assets/data.js"></script>
-<script src="assets/bilan.js"></script>
 <script>
-  initBilan("mecano");
+  const domain = "mecano";
+  let items = [];
+  let cart = [];
+  let profile = null;
+
+  async function init() {
+    profile = await requireRole(["mecano", "gestionnaire"]);
+    if (!profile) return;
+    document.getElementById("sale-date-display").value = formatDate(new Date());
+    await loadItems();
+  }
+
+  async function loadItems() {
+    items = await listItems(domain, { onlyActive: true });
+    renderGrid();
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById("item-grid");
+    grid.innerHTML = "";
+    document.getElementById("grid-empty").style.display = items.length ? "none" : "block";
+    for (const item of items) {
+      const inCart = cart.find((c) => c.item_id === item.id);
+      const remaining = item.stock - (inCart ? inCart.quantity : 0);
+      const card = document.createElement("div");
+      card.className = "item-card" + (remaining <= 0 ? " out-of-stock" : "");
+      card.innerHTML = `
+        <div class="item-stock-badge">${item.stock}</div>
+        <div class="item-img-box">${item.image_data ? `<img src="${item.image_data}" />` : '<span class="muted" style="font-size:1.6rem;">?</span>'}</div>
+        <div class="item-name">${escapeHtml(item.name)}</div>
+        <div class="item-price">${formatUSD(item.sell_price)}</div>
+      `;
+      if (remaining > 0) card.addEventListener("click", () => addToCart(item));
+      grid.appendChild(card);
+    }
+  }
+
+  function addToCart(item) {
+    const existing = cart.find((c) => c.item_id === item.id);
+    if (existing) {
+      if (existing.quantity >= item.stock) return toast("Stock insuffisant pour cet article.", "error");
+      existing.quantity += 1;
+      existing.line_total = existing.quantity * existing.unit_price;
+    } else {
+      cart.push({ item_id: item.id, item_name: item.name, unit_price: item.sell_price, quantity: 1, line_total: item.sell_price, max_stock: item.stock });
+    }
+    renderTicket();
+    renderGrid();
+  }
+
+  function changeQty(itemId, delta) {
+    const line = cart.find((c) => c.item_id === itemId);
+    if (!line) return;
+    const newQty = line.quantity + delta;
+    if (newQty <= 0) {
+      cart = cart.filter((c) => c.item_id !== itemId);
+    } else if (newQty > line.max_stock) {
+      toast("Stock insuffisant.", "error");
+      return;
+    } else {
+      line.quantity = newQty;
+      line.line_total = newQty * line.unit_price;
+    }
+    renderTicket();
+    renderGrid();
+  }
+
+  function renderTicket() {
+    const ticket = document.getElementById("ticket");
+    const total = cart.reduce((s, l) => s + l.line_total, 0);
+    document.getElementById("ticket-total").textContent = formatUSD(total);
+    document.getElementById("validate-sale").disabled = cart.length === 0;
+    document.getElementById("preview-devis").disabled = cart.length === 0;
+
+    if (cart.length === 0) {
+      ticket.innerHTML = '<div class="empty-state" id="ticket-empty">Le ticket est vide.</div>';
+      return;
+    }
+    ticket.innerHTML = cart
+      .map(
+        (l) => `
+      <div class="ticket-line">
+        <div>
+          <div>${escapeHtml(l.item_name)}</div>
+          <div class="muted mono" style="font-size:0.75rem;">${formatUSD(l.unit_price)} / unité</div>
+        </div>
+        <div class="qty-stepper">
+          <button type="button" class="btn-ghost btn-sm" data-minus="${l.item_id}">−</button>
+          <span class="mono">${l.quantity}</span>
+          <button type="button" class="btn-ghost btn-sm" data-plus="${l.item_id}">+</button>
+        </div>
+        <div class="mono" style="width:70px;text-align:right;">${formatUSD(l.line_total)}</div>
+      </div>`
+      )
+      .join("");
+    ticket.querySelectorAll("[data-plus]").forEach((b) => b.addEventListener("click", () => changeQty(b.dataset.plus, 1)));
+    ticket.querySelectorAll("[data-minus]").forEach((b) => b.addEventListener("click", () => changeQty(b.dataset.minus, -1)));
+  }
+
+  function fillInvoice(docTypeLabel) {
+    document.getElementById("inv-doctype").textContent = docTypeLabel;
+    document.getElementById("inv-date").textContent = formatDate(new Date());
+    document.getElementById("inv-client").textContent = document.getElementById("client-name").value.trim() || "—";
+    document.getElementById("inv-vehicle").textContent = document.getElementById("vehicle-model").value.trim() || "—";
+    document.getElementById("inv-plate").textContent = document.getElementById("plate").value.trim() || "—";
+    const tbody = document.getElementById("inv-lines");
+    tbody.innerHTML = cart
+      .map((l) => `<tr><td>${escapeHtml(l.item_name)}</td><td class="num">${l.quantity}</td><td class="num">${formatUSD(l.unit_price)}</td><td class="num">${formatUSD(l.line_total)}</td></tr>`)
+      .join("");
+    const total = cart.reduce((s, l) => s + l.line_total, 0);
+    document.getElementById("inv-total").textContent = formatUSD(total);
+    const note = document.getElementById("sale-note").value.trim();
+    document.getElementById("inv-note").textContent = note ? "Note : " + note : "";
+    document.getElementById("invoice-modal").style.display = "flex";
+  }
+
+  document.getElementById("preview-devis").addEventListener("click", () => fillInvoice("Devis"));
+
+  document.getElementById("close-invoice").addEventListener("click", () => {
+    document.getElementById("invoice-modal").style.display = "none";
+  });
+
+  document.getElementById("print-invoice").addEventListener("click", () => window.print());
+
+  document.getElementById("copy-invoice").addEventListener("click", async () => {
+    const el = document.getElementById("invoice-content");
+    try {
+      const canvas = await html2canvas(el, { backgroundColor: "#efe7d8", scale: 2 });
+      canvas.toBlob(async (blob) => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          toast("Image copiée dans le presse-papier.", "success");
+        } catch (err) {
+          toast("Copie impossible sur ce navigateur, utilise Imprimer.", "error");
+        }
+      });
+    } catch (err) {
+      toast("Erreur lors de la génération de l'image.", "error");
+    }
+  });
+
+  document.getElementById("validate-sale").addEventListener("click", async () => {
+    if (cart.length === 0) return;
+    const btn = document.getElementById("validate-sale");
+    btn.disabled = true;
+    btn.textContent = "Enregistrement...";
+    try {
+      await createSale(
+        domain,
+        {
+          seller_id: profile.id,
+          seller_name: sellerDisplayName(profile),
+          client_name: document.getElementById("client-name").value.trim() || null,
+          plate: document.getElementById("plate").value.trim() || null,
+          vehicle_model: document.getElementById("vehicle-model").value.trim() || null,
+          doc_type: "facture",
+          note: document.getElementById("sale-note").value.trim() || null,
+          sale_date: new Date().toISOString(),
+        },
+        cart.map(({ max_stock, ...rest }) => rest)
+      );
+      toast("Facture enregistrée.", "success");
+      fillInvoice("Facture");
+      cart = [];
+      document.getElementById("sale-note").value = "";
+      renderTicket();
+      await loadItems();
+    } catch (err) {
+      toast("Erreur : " + err.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Enregistrer la facture";
+    }
+  });
+
+  init();
 </script>
 </body>
 </html>
