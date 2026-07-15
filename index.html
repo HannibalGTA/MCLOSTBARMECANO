@@ -1,93 +1,170 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>The Lost MC — Connexion</title>
-<link rel="stylesheet" href="assets/style.css" />
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body>
-<div class="login-screen">
-  <div class="login-box">
-    <img src="assets/MCbar.png" alt="The Lost MC" class="login-logo" />
-    <div class="login-title">THE LOST MC</div>
-    <div class="login-sub">Gestion Bar &amp; Garage</div>
+// =========================================================
+// AUTH — connexion Supabase, garde de rôle, navigation
+// =========================================================
 
-    <div class="role-grid" id="role-grid">
-      <button class="role-btn" data-role="barman">Barman</button>
-      <button class="role-btn" data-role="mecano">Mécano</button>
-      <button class="role-btn" data-role="gestionnaire">Gestionnaire</button>
-      <button class="role-btn" data-role="superviseur">Superviseur</button>
-    </div>
+/**
+ * Tente une connexion pour le rôle donné avec le mot de passe fourni.
+ * Renvoie {ok:true, role} ou {ok:false, error}
+ */
+async function loginAs(role, password) {
+  const email = ROLE_EMAILS[role];
+  if (!email) return { ok: false, error: "Rôle inconnu." };
 
-    <form id="login-form">
-      <label for="password">Mot de passe</label>
-      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" disabled />
-      <div class="login-error" id="login-error"></div>
-      <button type="submit" class="btn-primary" style="width:100%" id="submit-btn" disabled>Se connecter</button>
-    </form>
-  </div>
-</div>
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) return { ok: false, error: "Mot de passe incorrect." };
 
-<script src="assets/config.js"></script>
-<script src="assets/auth.js"></script>
-<script>
-  let selectedRole = null;
-  const roleButtons = document.querySelectorAll(".role-btn");
-  const passwordInput = document.getElementById("password");
-  const submitBtn = document.getElementById("submit-btn");
-  const errorEl = document.getElementById("login-error");
+  // Vérifie que le profil correspond bien au rôle demandé (sécurité supplémentaire)
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== role) {
+    await supabaseClient.auth.signOut();
+    return { ok: false, error: "Ce compte n'est pas configuré pour ce rôle." };
+  }
+  return { ok: true, role: profile.role };
+}
 
-  roleButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      roleButtons.forEach((b) => b.classList.remove("selected"));
-      btn.classList.add("selected");
-      selectedRole = btn.dataset.role;
-      passwordInput.disabled = false;
-      submitBtn.disabled = false;
-      errorEl.textContent = "";
-      passwordInput.focus();
+/**
+ * Récupère le jeton d'accès (JWT) de la session en cours, nécessaire pour appeler
+ * la fonction serveur de changement de mot de passe.
+ */
+async function getAccessToken() {
+  const { data } = await supabaseClient.auth.getSession();
+  return data?.session?.access_token || null;
+}
+
+/**
+ * Nom/pseudo du joueur derrière ce navigateur (distinct du rôle partagé).
+ * Stocké en sessionStorage : propre à cet onglet/cette session de connexion,
+ * ce qui permet à plusieurs barmans (ou mécanos...) connectés en même temps
+ * avec le même compte de rôle d'apparaître sous leur propre nom en caisse et en comptabilité.
+ */
+function getStaffName() {
+  return sessionStorage.getItem("lostmc_staff_name") || "";
+}
+function setStaffName(name) {
+  sessionStorage.setItem("lostmc_staff_name", name || "");
+}
+
+/**
+ * Nom à utiliser comme "vendeur" sur une vente : le pseudo saisi si présent, sinon le rôle.
+ */
+function sellerDisplayName(profile) {
+  const staff = getStaffName();
+  return staff ? staff : ROLE_LABELS[profile.role];
+}
+
+/**
+ * Appelle la fonction serveur "change-password" (Supabase Edge Function) pour modifier
+ * le mot de passe d'un des 4 comptes de rôle. Réservé au gestionnaire (vérifié aussi côté serveur).
+ */
+async function changeRolePassword(targetRole, newPassword) {
+  const token = await getAccessToken();
+  if (!token) return { ok: false, error: "Session expirée, reconnecte-toi." };
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/change-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ target_role: targetRole, new_password: newPassword }),
     });
-  });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data.error || "Erreur serveur." };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: "Impossible de contacter le serveur." };
+  }
+}
+async function logout() {
+  await supabaseClient.auth.signOut();
+  setStaffName("");
+  window.location.href = "index.html";
+}
 
-  document.getElementById("login-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (!selectedRole) return;
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Connexion...";
-    errorEl.textContent = "";
+/**
+ * Récupère le profil (role, display_name) de l'utilisateur connecté.
+ */
+async function getCurrentProfile() {
+  const { data: sessionData } = await supabaseClient.auth.getSession();
+  const session = sessionData?.session;
+  if (!session) return null;
 
-    const result = await loginAs(selectedRole, passwordInput.value);
-    if (!result.ok) {
-      errorEl.textContent = result.error;
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Se connecter";
-      return;
-    }
+  const { data, error } = await supabaseClient
+    .from("profiles")
+    .select("id, role, display_name")
+    .eq("id", session.user.id)
+    .single();
 
-    const destinations = {
-      barman: "caisse-bar.html",
-      mecano: "caisse-mecano.html",
-      gestionnaire: "admin.html",
-      superviseur: "bilan-bar.html",
-    };
-    window.location.href = destinations[result.role] || "index.html";
-  });
+  if (error || !data) return null;
+  return data;
+}
 
-  // Si déjà connecté, redirige directement
-  (async () => {
-    const profile = await getCurrentProfile();
-    if (profile) {
-      const destinations = {
-        barman: "caisse-bar.html",
-        mecano: "caisse-mecano.html",
-        gestionnaire: "admin.html",
-        superviseur: "bilan-bar.html",
-      };
-      window.location.href = destinations[profile.role] || "index.html";
-    }
-  })();
-</script>
-</body>
-</html>
+/**
+ * A appeler en haut de chaque page protégée.
+ * allowedRoles: tableau des rôles autorisés à voir cette page.
+ * Redirige vers index.html si non connecté ou rôle non autorisé.
+ * Renvoie le profil si tout est ok.
+ */
+async function requireRole(allowedRoles) {
+  const profile = await getCurrentProfile();
+  if (!profile) {
+    window.location.href = "index.html";
+    return null;
+  }
+  if (!allowedRoles.includes(profile.role)) {
+    window.location.href = "acces-refuse.html";
+    return null;
+  }
+  renderNav(profile);
+  return profile;
+}
+
+/**
+ * Construit la barre de navigation en fonction du rôle connecté.
+ */
+function renderNav(profile) {
+  const nav = document.getElementById("app-nav");
+  if (!nav) return;
+
+  const links = [];
+  const role = profile.role;
+
+  if (role === "barman" || role === "gestionnaire") {
+    links.push({ href: "caisse-bar.html", label: "Caisse Bar" });
+  }
+  if (role === "mecano" || role === "gestionnaire") {
+    links.push({ href: "caisse-mecano.html", label: "Caisse Mécano" });
+  }
+  if (role === "gestionnaire" || role === "superviseur") {
+    links.push({ href: "bilan-bar.html", label: "Bilan Bar" });
+    links.push({ href: "bilan-mecano.html", label: "Bilan Mécano" });
+  }
+  if (role === "gestionnaire") {
+    links.push({ href: "achats.html", label: "Achats" });
+    links.push({ href: "admin.html", label: "Administration" });
+  }
+
+  const here = window.location.pathname.split("/").pop();
+  const staffName = getStaffName();
+  nav.innerHTML = `
+    <div class="nav-brand">
+      <span class="nav-brand-top">THE LOST MC</span>
+      <span class="nav-brand-bottom">Gestion Bar &amp; Garage</span>
+    </div>
+    <div class="nav-links">
+      ${links
+        .map(
+          (l) =>
+            `<a href="${l.href}" class="${l.href === here ? "active" : ""}">${l.label}</a>`
+        )
+        .join("")}
+    </div>
+    <div class="nav-user">
+      <span>${ROLE_LABELS[role]}${staffName ? " — " + escapeHtml(staffName) : ""}</span>
+      <button id="logout-btn" class="btn-ghost">Déconnexion</button>
+    </div>
+  `;
+  document.getElementById("logout-btn").addEventListener("click", logout);
+}
