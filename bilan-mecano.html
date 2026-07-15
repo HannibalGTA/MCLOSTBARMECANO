@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="assets/style.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <nav class="topbar" id="app-nav"></nav>
@@ -30,6 +31,7 @@
       <div style="display:flex;gap:8px;">
         <button class="btn-ghost" id="filter-reset">Réinitialiser</button>
         <button class="btn-primary" id="filter-apply">Filtrer</button>
+        <button class="btn-secondary" id="export-sheet-btn">Exporter (Google Sheet)</button>
       </div>
     </div>
   </div>
@@ -123,6 +125,7 @@
 <script src="assets/helpers.js"></script>
 <script src="assets/data.js"></script>
 <script src="assets/invoice.js"></script>
+<script src="assets/export.js"></script>
 <script src="assets/bilan.js"></script>
 <script>
   initBilan("mecano");
