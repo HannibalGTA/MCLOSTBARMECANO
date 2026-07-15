@@ -104,7 +104,7 @@
         </div>
       </div>
 
-      <div class="grid-3">
+      <div class="grid-2">
         <div>
           <label for="emp-nickname">Pseudo en jeu (tel que tapé à la connexion)</label>
           <input type="text" id="emp-nickname" placeholder="Ex : Jhon Doe" required />
@@ -112,10 +112,6 @@
         <div>
           <label for="emp-role">Rôle / poste</label>
           <input type="text" id="emp-role" placeholder="Ex : Barman senior" />
-        </div>
-        <div>
-          <label for="emp-percentage">% de marge reversé</label>
-          <input type="number" id="emp-percentage" min="0" max="100" step="1" inputmode="numeric" value="10" />
         </div>
       </div>
 
@@ -398,7 +394,6 @@
     employeeContractData = null;
     document.getElementById("employee-form").reset();
     document.getElementById("emp-id").value = "";
-    document.getElementById("emp-percentage").value = "10";
     document.getElementById("emp-active").checked = true;
     document.getElementById("emp-contract-current").textContent = "";
     document.getElementById("emp-cancel-edit").style.display = "none";
@@ -438,7 +433,6 @@
       employee_number: document.getElementById("emp-number").value.trim(),
       staff_nickname: document.getElementById("emp-nickname").value.trim(),
       job_role: document.getElementById("emp-role").value.trim() || null,
-      salary_percentage: Math.round(parseFloat(document.getElementById("emp-percentage").value)) || 0,
       works_bar: worksBar,
       works_mecano: worksMecano,
       contract_start_date: document.getElementById("emp-contract-start").value || null,
@@ -507,7 +501,6 @@
     document.getElementById("emp-number").value = emp.employee_number;
     document.getElementById("emp-nickname").value = emp.staff_nickname;
     document.getElementById("emp-role").value = emp.job_role || "";
-    document.getElementById("emp-percentage").value = emp.salary_percentage;
     document.getElementById("emp-works-bar").checked = emp.works_bar;
     document.getElementById("emp-works-mecano").checked = emp.works_mecano;
     document.getElementById("emp-contract-start").value = emp.contract_start_date || "";
