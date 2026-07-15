@@ -7,14 +7,17 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Achats — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260716a" />
+<link rel="stylesheet" href="assets/style.css?v=20260716b" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="theme-bar">
 <nav class="topbar" id="app-nav"></nav>
 
 <div class="page-wrap">
-  <h1>Gestion des achats</h1>
+  <div class="page-title-row">
+    <img src="assets/MCbar.png" alt="" class="page-header-logo" id="page-logo" />
+    <h1>Gestion des achats</h1>
+  </div>
   <p class="muted">Enregistre les dépenses liées aux articles du bar ou du garage. Chaque achat alimente automatiquement la comptabilité et le stock.</p>
 
   <div class="card">
@@ -87,10 +90,10 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260716a"></script>
-<script src="assets/auth.js?v=20260716a"></script>
-<script src="assets/helpers.js?v=20260716a"></script>
-<script src="assets/data.js?v=20260716a"></script>
+<script src="assets/config.js?v=20260716b"></script>
+<script src="assets/auth.js?v=20260716b"></script>
+<script src="assets/helpers.js?v=20260716b"></script>
+<script src="assets/data.js?v=20260716b"></script>
 <script>
   let currentDomain = "bar";
   let catalog = [];
@@ -116,6 +119,8 @@
     currentDomain = domain;
     document.getElementById("tab-bar").classList.toggle("selected", domain === "bar");
     document.getElementById("tab-mecano").classList.toggle("selected", domain === "mecano");
+    document.body.className = domain === "bar" ? "theme-bar" : "theme-mecano";
+    document.getElementById("page-logo").src = domain === "bar" ? "assets/MCbar.png" : "assets/MCmecano.png";
     purchaseLines = [];
     purchaseTotalManuallySet = false;
     renderPurchaseTicket();
