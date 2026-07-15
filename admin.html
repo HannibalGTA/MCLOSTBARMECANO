@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Administration — The Lost MC</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<nav class="topbar" id="app-nav"></nav>
+
+<div class="page-wrap">
+  <div class="flex-between">
+    <h1>Administration</h1>
+  </div>
+  <p class="muted">Crée et gère les articles vendus au bar et au garage : prix d'achat, prix de vente, stock et image.</p>
+
+  <div class="role-grid" style="grid-template-columns: 1fr 1fr; max-width:360px; margin-bottom:20px;">
+    <button class="role-btn selected" id="tab-bar" data-domain="bar">Articles Bar</button>
+    <button class="role-btn" id="tab-mecano" data-domain="mecano">Articles Mécano</button>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><h2 id="form-title">Nouvel article — Bar</h2></div>
+      <form id="item-form">
+        <input type="hidden" id="item-id" />
+        <label for="item-name">Nom de l'article</label>
+        <input type="text" id="item-name" placeholder="Ex : Bière pression" required />
+
+        <div class="field-row">
+          <div>
+            <label for="item-buy">Prix d'achat ($)</label>
+            <input type="number" id="item-buy" min="0" step="0.01" required />
+          </div>
+          <div>
+            <label for="item-sell">Prix de vente ($)</label>
+            <input type="number" id="item-sell" min="0" step="0.01" required />
+          </div>
+        </div>
+
+        <label for="item-stock">Stock actuel</label>
+        <input type="number" id="item-stock" min="0" step="1" required />
+
+        <label for="item-image">Image (PNG, redimensionnée automatiquement)</label>
+        <input type="file" id="item-image" accept="image/png,image/jpeg" />
+        <div id="image-preview-box" class="item-img-box" style="width:120px;height:120px;margin-bottom:14px;"></div>
+
+        <div class="flex-between">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:0.85rem;">
+            <input type="checkbox" id="item-active" style="width:auto;margin:0;" checked /> Article actif (visible en caisse)
+          </label>
+        </div>
+
+        <div class="flex-between" style="margin-top:10px;">
+          <button type="button" class="btn-ghost" id="cancel-edit" style="display:none;">Annuler la modification</button>
+          <button type="submit" class="btn-primary">Enregistrer</button>
+        </div>
+        <div class="login-error" id="form-error"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><h2>Catalogue — <span id="catalog-domain-label">Bar</span></h2></div>
+      <div id="items-table-wrap">
+        <table>
+          <thead>
+            <tr><th></th><th>Nom</th><th class="num">Achat</th><th class="num">Vente</th><th class="num">Stock</th><th></th></tr>
+          </thead>
+          <tbody id="items-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="items-empty" style="display:none;">Aucun article pour le moment.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/helpers.js"></script>
+<script src="assets/data.js"></script>
+<script>
+  let currentDomain = "bar";
+  let currentImageDataUrl = null;
+  let editingId = null;
+
+  async function init() {
+    const profile = await requireRole(["gestionnaire"]);
+    if (!profile) return;
+    await refreshTable();
+  }
+
+  document.getElementById("tab-bar").addEventListener("click", () => switchDomain("bar"));
+  document.getElementById("tab-mecano").addEventListener("click", () => switchDomain("mecano"));
+
+  function switchDomain(domain) {
+    currentDomain = domain;
+    document.getElementById("tab-bar").classList.toggle("selected", domain === "bar");
+    document.getElementById("tab-mecano").classList.toggle("selected", domain === "mecano");
+    document.getElementById("catalog-domain-label").textContent = domain === "bar" ? "Bar" : "Mécano";
+    document.getElementById("form-title").textContent = "Nouvel article — " + (domain === "bar" ? "Bar" : "Mécano");
+    resetForm();
+    refreshTable();
+  }
+
+  function resetForm() {
+    editingId = null;
+    currentImageDataUrl = null;
+    document.getElementById("item-form").reset();
+    document.getElementById("item-id").value = "";
+    document.getElementById("item-active").checked = true;
+    document.getElementById("image-preview-box").innerHTML = "";
+    document.getElementById("cancel-edit").style.display = "none";
+    document.getElementById("form-error").textContent = "";
+  }
+
+  document.getElementById("cancel-edit").addEventListener("click", resetForm);
+
+  document.getElementById("item-image").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      currentImageDataUrl = await resizeAndCenterImage(file, 300);
+      document.getElementById("image-preview-box").innerHTML = `<img src="${currentImageDataUrl}" style="max-width:100%;max-height:100%;object-fit:contain;" />`;
+    } catch (err) {
+      toast(err.message, "error");
+      e.target.value = "";
+    }
+  });
+
+  document.getElementById("item-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById("form-error");
+    errorEl.textContent = "";
+
+    const name = document.getElementById("item-name").value.trim();
+    const buy = parseFloat(document.getElementById("item-buy").value);
+    const sell = parseFloat(document.getElementById("item-sell").value);
+    const stock = parseInt(document.getElementById("item-stock").value, 10);
+    const active = document.getElementById("item-active").checked;
+
+    if (sell < buy) {
+      errorEl.textContent = "Le prix de vente ne peut pas être inférieur au prix d'achat.";
+      return;
+    }
+
+    const payload = {
+      name,
+      buy_price: buy,
+      sell_price: sell,
+      stock,
+      active,
+    };
+    if (editingId) payload.id = editingId;
+    if (currentImageDataUrl) payload.image_data = currentImageDataUrl;
+
+    try {
+      await upsertItem(currentDomain, payload);
+      toast(editingId ? "Article mis à jour." : "Article créé.", "success");
+      resetForm();
+      await refreshTable();
+    } catch (err) {
+      errorEl.textContent = "Erreur : " + err.message;
+    }
+  });
+
+  async function refreshTable() {
+    const items = await listItems(currentDomain);
+    const tbody = document.getElementById("items-tbody");
+    const empty = document.getElementById("items-empty");
+    tbody.innerHTML = "";
+    empty.style.display = items.length ? "none" : "block";
+
+    for (const item of items) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${item.image_data ? `<div class="item-img-box" style="width:36px;height:36px;"><img src="${item.image_data}" /></div>` : ""}</td>
+        <td>${escapeHtml(item.name)} ${!item.active ? '<span class="badge muted" style="border:1px solid #444;">inactif</span>' : ""}</td>
+        <td class="num">${formatUSD(item.buy_price)}</td>
+        <td class="num">${formatUSD(item.sell_price)}</td>
+        <td class="num">${item.stock}</td>
+        <td>
+          <button class="btn-ghost btn-sm" data-action="edit" data-id="${item.id}">Modifier</button>
+          <button class="btn-danger btn-sm" data-action="delete" data-id="${item.id}">Supprimer</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    tbody.querySelectorAll('[data-action="edit"]').forEach((btn) => {
+      btn.addEventListener("click", () => editItem(btn.dataset.id, items));
+    });
+    tbody.querySelectorAll('[data-action="delete"]').forEach((btn) => {
+      btn.addEventListener("click", () => removeItem(btn.dataset.id));
+    });
+  }
+
+  function editItem(id, items) {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    editingId = id;
+    document.getElementById("form-title").textContent = "Modifier — " + item.name;
+    document.getElementById("item-id").value = id;
+    document.getElementById("item-name").value = item.name;
+    document.getElementById("item-buy").value = item.buy_price;
+    document.getElementById("item-sell").value = item.sell_price;
+    document.getElementById("item-stock").value = item.stock;
+    document.getElementById("item-active").checked = item.active;
+    currentImageDataUrl = item.image_data || null;
+    document.getElementById("image-preview-box").innerHTML = item.image_data
+      ? `<img src="${item.image_data}" style="max-width:100%;max-height:100%;object-fit:contain;" />`
+      : "";
+    document.getElementById("cancel-edit").style.display = "inline-block";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function removeItem(id) {
+    if (!confirm("Supprimer définitivement cet article ?")) return;
+    try {
+      await deleteItem(currentDomain, id);
+      toast("Article supprimé.", "success");
+      await refreshTable();
+    } catch (err) {
+      toast("Erreur : " + err.message, "error");
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>

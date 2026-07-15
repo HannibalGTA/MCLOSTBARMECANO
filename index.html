@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Lost MC — Connexion</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="login-screen">
+  <div class="login-box">
+    <img src="assets/MCbar.png" alt="The Lost MC" class="login-logo" />
+    <div class="login-title">THE LOST MC</div>
+    <div class="login-sub">Gestion Bar &amp; Garage</div>
+
+    <div class="role-grid" id="role-grid">
+      <button class="role-btn" data-role="barman">Barman</button>
+      <button class="role-btn" data-role="mecano">Mécano</button>
+      <button class="role-btn" data-role="gestionnaire">Gestionnaire</button>
+      <button class="role-btn" data-role="superviseur">Superviseur</button>
+    </div>
+
+    <form id="login-form">
+      <label for="password">Mot de passe</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" disabled />
+      <div class="login-error" id="login-error"></div>
+      <button type="submit" class="btn-primary" style="width:100%" id="submit-btn" disabled>Se connecter</button>
+    </form>
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script>
+  let selectedRole = null;
+  const roleButtons = document.querySelectorAll(".role-btn");
+  const passwordInput = document.getElementById("password");
+  const submitBtn = document.getElementById("submit-btn");
+  const errorEl = document.getElementById("login-error");
+
+  roleButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      roleButtons.forEach((b) => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      selectedRole = btn.dataset.role;
+      passwordInput.disabled = false;
+      submitBtn.disabled = false;
+      errorEl.textContent = "";
+      passwordInput.focus();
+    });
+  });
+
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!selectedRole) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Connexion...";
+    errorEl.textContent = "";
+
+    const result = await loginAs(selectedRole, passwordInput.value);
+    if (!result.ok) {
+      errorEl.textContent = result.error;
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Se connecter";
+      return;
+    }
+
+    const destinations = {
+      barman: "caisse-bar.html",
+      mecano: "caisse-mecano.html",
+      gestionnaire: "admin.html",
+      superviseur: "bilan-bar.html",
+    };
+    window.location.href = destinations[result.role] || "index.html";
+  });
+
+  // Si déjà connecté, redirige directement
+  (async () => {
+    const profile = await getCurrentProfile();
+    if (profile) {
+      const destinations = {
+        barman: "caisse-bar.html",
+        mecano: "caisse-mecano.html",
+        gestionnaire: "admin.html",
+        superviseur: "bilan-bar.html",
+      };
+      window.location.href = destinations[profile.role] || "index.html";
+    }
+  })();
+</script>
+</body>
+</html>

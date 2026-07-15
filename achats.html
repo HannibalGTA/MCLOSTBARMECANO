@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Achats — The Lost MC</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<nav class="topbar" id="app-nav"></nav>
+
+<div class="page-wrap">
+  <h1>Gestion des achats</h1>
+  <p class="muted">Enregistre les dépenses liées aux articles du bar ou du garage. Chaque achat alimente automatiquement la comptabilité et le stock.</p>
+
+  <div class="card">
+    <div class="card-title"><h2>Nouvel achat</h2></div>
+
+    <div class="role-grid" style="grid-template-columns: 1fr 1fr; max-width:360px; margin-bottom:16px;">
+      <button class="role-btn selected" id="tab-bar" data-domain="bar">Bar</button>
+      <button class="role-btn" id="tab-mecano" data-domain="mecano">Mécano</button>
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <label for="line-item">Article enregistré (optionnel)</label>
+        <select id="line-item"><option value="">— Dépense libre —</option></select>
+      </div>
+      <div>
+        <label for="line-label">Libellé</label>
+        <input type="text" id="line-label" placeholder="Ex : Caisse de bières 24x" />
+      </div>
+    </div>
+    <div class="grid-3">
+      <div>
+        <label for="line-qty">Quantité</label>
+        <input type="number" id="line-qty" min="0.01" step="0.01" value="1" />
+      </div>
+      <div>
+        <label for="line-price">Prix unitaire ($)</label>
+        <input type="number" id="line-price" min="0" step="0.01" />
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <button type="button" class="btn-secondary" id="add-line" style="width:100%;margin-bottom:14px;">Ajouter la ligne</button>
+      </div>
+    </div>
+
+    <div class="ticket" id="purchase-ticket" style="margin-bottom:16px;">
+      <div class="empty-state" id="purchase-ticket-empty">Aucune ligne ajoutée.</div>
+    </div>
+    <div class="ticket-total"><span>Total achat</span><span id="purchase-total">$0.00</span></div>
+
+    <label for="purchase-note" style="margin-top:14px;">Note (facultatif)</label>
+    <textarea id="purchase-note" rows="2" placeholder="Ex : réappro fournisseur du samedi"></textarea>
+    <button class="btn-primary" id="save-purchase" style="width:100%;" disabled>Enregistrer l'achat</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><h2>Historique des achats</h2></div>
+    <table>
+      <thead><tr><th>Date</th><th>Domaine</th><th>Note</th><th class="num">Total</th><th></th></tr></thead>
+      <tbody id="history-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="history-empty" style="display:none;">Aucun achat enregistré.</div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="detail-modal" style="display:none;">
+  <div class="modal-box">
+    <div id="detail-modal-body"></div>
+    <div class="flex-between" style="margin-top:16px;">
+      <button class="btn-ghost" id="close-detail-modal">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/helpers.js"></script>
+<script src="assets/data.js"></script>
+<script>
+  let currentDomain = "bar";
+  let catalog = [];
+  let purchaseLines = [];
+  let profile = null;
+
+  async function init() {
+    profile = await requireRole(["gestionnaire"]);
+    if (!profile) return;
+    await loadCatalog();
+    await loadHistory();
+  }
+
+  document.getElementById("tab-bar").addEventListener("click", () => switchDomain("bar"));
+  document.getElementById("tab-mecano").addEventListener("click", () => switchDomain("mecano"));
+
+  async function switchDomain(domain) {
+    currentDomain = domain;
+    document.getElementById("tab-bar").classList.toggle("selected", domain === "bar");
+    document.getElementById("tab-mecano").classList.toggle("selected", domain === "mecano");
+    purchaseLines = [];
+    renderPurchaseTicket();
+    await loadCatalog();
+  }
+
+  async function loadCatalog() {
+    catalog = await listItems(currentDomain);
+    const select = document.getElementById("line-item");
+    select.innerHTML = '<option value="">— Dépense libre —</option>' + catalog.map((i) => `<option value="${i.id}">${escapeHtml(i.name)}</option>`).join("");
+  }
+
+  document.getElementById("line-item").addEventListener("change", (e) => {
+    const item = catalog.find((i) => i.id === e.target.value);
+    if (item) {
+      document.getElementById("line-label").value = item.name;
+      document.getElementById("line-price").value = item.buy_price;
+    }
+  });
+
+  document.getElementById("add-line").addEventListener("click", () => {
+    const itemId = document.getElementById("line-item").value || null;
+    const label = document.getElementById("line-label").value.trim();
+    const qty = parseFloat(document.getElementById("line-qty").value);
+    const price = parseFloat(document.getElementById("line-price").value);
+
+    if (!label) return toast("Indique un libellé pour cette dépense.", "error");
+    if (!qty || qty <= 0) return toast("La quantité doit être positive.", "error");
+    if (isNaN(price) || price < 0) return toast("Indique un prix unitaire valide.", "error");
+
+    purchaseLines.push({
+      item_id: itemId,
+      domain: currentDomain,
+      label,
+      unit_price: price,
+      quantity: qty,
+      line_total: qty * price,
+    });
+
+    document.getElementById("line-item").value = "";
+    document.getElementById("line-label").value = "";
+    document.getElementById("line-qty").value = "1";
+    document.getElementById("line-price").value = "";
+    renderPurchaseTicket();
+  });
+
+  function renderPurchaseTicket() {
+    const ticket = document.getElementById("purchase-ticket");
+    const total = purchaseLines.reduce((s, l) => s + l.line_total, 0);
+    document.getElementById("purchase-total").textContent = formatUSD(total);
+    document.getElementById("save-purchase").disabled = purchaseLines.length === 0;
+
+    if (purchaseLines.length === 0) {
+      ticket.innerHTML = '<div class="empty-state">Aucune ligne ajoutée.</div>';
+      return;
+    }
+    ticket.innerHTML = purchaseLines
+      .map(
+        (l, idx) => `
+      <div class="ticket-line">
+        <div>
+          <div>${escapeHtml(l.label)}</div>
+          <div class="muted mono" style="font-size:0.75rem;">${l.quantity} × ${formatUSD(l.unit_price)}</div>
+        </div>
+        <div class="mono">${formatUSD(l.line_total)}</div>
+        <button type="button" class="btn-danger btn-sm" data-idx="${idx}">✕</button>
+      </div>`
+      )
+      .join("");
+    ticket.querySelectorAll("[data-idx]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        purchaseLines.splice(parseInt(btn.dataset.idx, 10), 1);
+        renderPurchaseTicket();
+      });
+    });
+  }
+
+  document.getElementById("save-purchase").addEventListener("click", async () => {
+    if (purchaseLines.length === 0) return;
+    const btn = document.getElementById("save-purchase");
+    btn.disabled = true;
+    btn.textContent = "Enregistrement...";
+    try {
+      await createPurchase(
+        {
+          domain: currentDomain,
+          buyer_id: profile.id,
+          note: document.getElementById("purchase-note").value.trim() || null,
+          purchase_date: new Date().toISOString(),
+        },
+        purchaseLines
+      );
+      toast("Achat enregistré, stock et comptabilité mis à jour.", "success");
+      purchaseLines = [];
+      document.getElementById("purchase-note").value = "";
+      renderPurchaseTicket();
+      await loadCatalog();
+      await loadHistory();
+    } catch (err) {
+      toast("Erreur : " + err.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Enregistrer l'achat";
+    }
+  });
+
+  async function loadHistory() {
+    const purchases = await listPurchases({});
+    const tbody = document.getElementById("history-tbody");
+    tbody.innerHTML = "";
+    document.getElementById("history-empty").style.display = purchases.length ? "none" : "block";
+    for (const p of purchases) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${formatDateTime(p.purchase_date)}</td>
+        <td><span class="badge ${p.domain === "bar" ? "badge-bar" : "badge-mecano"}">${p.domain === "bar" ? "Bar" : "Mécano"}</span></td>
+        <td>${escapeHtml(p.note || "—")}</td>
+        <td class="num">${formatUSD(p.total)}</td>
+        <td>
+          <button class="btn-ghost btn-sm" data-action="view" data-id="${p.id}">Détail</button>
+          <button class="btn-danger btn-sm" data-action="delete" data-id="${p.id}">Supprimer</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+    tbody.querySelectorAll('[data-action="view"]').forEach((btn) => {
+      btn.addEventListener("click", () => openDetail(purchases.find((p) => p.id === btn.dataset.id)));
+    });
+    tbody.querySelectorAll('[data-action="delete"]').forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Supprimer cet achat ? Le stock sera ajusté en conséquence.")) return;
+        try {
+          await deletePurchase(btn.dataset.id);
+          toast("Achat supprimé.", "success");
+          await loadCatalog();
+          await loadHistory();
+        } catch (err) {
+          toast("Erreur : " + err.message, "error");
+        }
+      });
+    });
+  }
+
+  function openDetail(p) {
+    if (!p) return;
+    document.getElementById("detail-modal-body").innerHTML = `
+      <h3 class="mt-0">Achat ${p.domain === "bar" ? "Bar" : "Mécano"} — ${formatDateTime(p.purchase_date)}</h3>
+      ${p.note ? `<p class="muted">Note : ${escapeHtml(p.note)}</p>` : ""}
+      <table>
+        <thead><tr><th>Libellé</th><th class="num">Qté</th><th class="num">P.U.</th><th class="num">Total</th></tr></thead>
+        <tbody>
+          ${p.lines.map((l) => `<tr><td>${escapeHtml(l.label)}</td><td class="num">${l.quantity}</td><td class="num">${formatUSD(l.unit_price)}</td><td class="num">${formatUSD(l.line_total)}</td></tr>`).join("")}
+        </tbody>
+      </table>
+      <div class="ticket-total"><span>Total</span><span>${formatUSD(p.total)}</span></div>
+    `;
+    document.getElementById("detail-modal").style.display = "flex";
+  }
+  document.getElementById("close-detail-modal").addEventListener("click", () => {
+    document.getElementById("detail-modal").style.display = "none";
+  });
+
+  init();
+</script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bilan Mécano — The Lost MC</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<nav class="topbar" id="app-nav"></nav>
+
+<div class="page-wrap">
+  <h1>Bilan comptable — Mécano</h1>
+  <p class="muted">Chiffre d'affaires, achats, marge et gestion du stock, avec détail par date.</p>
+
+  <div class="card">
+    <div class="flex-between">
+      <div class="field-row" style="max-width:460px;">
+        <div>
+          <label for="filter-from">Du</label>
+          <input type="date" id="filter-from" />
+        </div>
+        <div>
+          <label for="filter-to">Au</label>
+          <input type="date" id="filter-to" />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-ghost" id="filter-reset">Réinitialiser</button>
+        <button class="btn-primary" id="filter-apply">Filtrer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-3">
+    <div class="stat-box"><div class="num" id="stat-revenue">$0.00</div><div class="label">Chiffre d'affaires</div></div>
+    <div class="stat-box"><div class="num" id="stat-cost">$0.00</div><div class="label">Total achats</div></div>
+    <div class="stat-box"><div class="num" id="stat-margin">$0.00</div><div class="label">Marge</div></div>
+  </div>
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="stat-box"><div class="num" id="stat-sales-count">0</div><div class="label">Ventes sur la période</div></div>
+    <div class="stat-box"><div class="num" id="stat-stock-value">$0.00</div><div class="label">Valeur du stock actuel</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><h2>Stock — Articles Mécano</h2></div>
+    <table>
+      <thead><tr><th>Article</th><th class="num">Stock</th><th class="num">Prix achat</th><th class="num">Prix vente</th><th class="num">Valeur stock</th></tr></thead>
+      <tbody id="stock-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><h2>Ventes</h2></div>
+    <table>
+      <thead><tr><th>Date</th><th>Vendeur</th><th>Client / Véhicule</th><th class="num">Total</th><th></th></tr></thead>
+      <tbody id="sales-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="sales-empty" style="display:none;">Aucune vente sur cette période.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><h2>Achats</h2></div>
+    <table>
+      <thead><tr><th>Date</th><th>Note</th><th class="num">Total</th><th></th></tr></thead>
+      <tbody id="purchases-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="purchases-empty" style="display:none;">Aucun achat sur cette période.</div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="sale-modal" style="display:none;">
+  <div class="modal-box">
+    <div id="sale-modal-body"></div>
+    <div class="flex-between" style="margin-top:16px;">
+      <button class="btn-ghost" id="close-sale-modal">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/helpers.js"></script>
+<script src="assets/data.js"></script>
+<script src="assets/bilan.js"></script>
+<script>
+  initBilan("mecano");
+</script>
+</body>
+</html>
