@@ -6,6 +6,7 @@
 <title>Administration — The Lost MC</title>
 <link rel="stylesheet" href="assets/style.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <nav class="topbar" id="app-nav"></nav>
@@ -149,12 +150,19 @@
     </table>
     <div class="empty-state" id="employees-empty" style="display:none;">Aucun employé pour le moment.</div>
   </div>
+
+  <div class="card" style="border-color:var(--blood);">
+    <div class="card-title"><h2 style="color:var(--blood-bright);">⚠ Zone dangereuse — Purge complète</h2></div>
+    <p class="muted">Supprime définitivement <strong>toutes</strong> les ventes (bar + garage), toutes les dépenses/achats, et tous les versements de salaire. Le catalogue d'articles, les employés et les comptes de connexion ne sont jamais touchés. Une sauvegarde complète au format Google Sheet (.xlsx) est générée et téléchargée automatiquement <strong>avant</strong> toute suppression.</p>
+    <button class="btn-danger" id="purge-btn">Exporter une sauvegarde puis tout purger</button>
+  </div>
 </div>
 
 <script src="assets/config.js"></script>
 <script src="assets/auth.js"></script>
 <script src="assets/helpers.js"></script>
 <script src="assets/data.js"></script>
+<script src="assets/export.js"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
@@ -521,6 +529,53 @@
       toast("Erreur : " + err.message, "error");
     }
   }
+
+  // ---------- ZONE DANGEREUSE : purge complète ----------
+  document.getElementById("purge-btn").addEventListener("click", async () => {
+    const confirmed = await dangerConfirmDialog(
+      "Purge complète — action irréversible",
+      "Ceci va supprimer DÉFINITIVEMENT toutes les ventes, tous les achats/dépenses et tous les versements de salaire, pour le Bar ET le Garage. Une sauvegarde .xlsx sera téléchargée automatiquement juste avant. Le catalogue d'articles, les employés et les comptes ne seront pas touchés.",
+      "SUPPRIMER TOUT"
+    );
+    if (!confirmed) return;
+
+    const btn = document.getElementById("purge-btn");
+    btn.disabled = true;
+    btn.textContent = "Sauvegarde en cours...";
+    try {
+      const [barSales, mecanoSales, barPurchases, mecanoPurchases, salaryPayments] = await Promise.all([
+        listSales("bar", {}),
+        listSales("mecano", {}),
+        listPurchases({ domain: "bar" }),
+        listPurchases({ domain: "mecano" }),
+        listSalaryPayments(),
+      ]);
+
+      downloadWorkbook(
+        {
+          "Bar - Ventes": saleRowsFlat(barSales, "bar"),
+          "Bar - Ventes lignes": saleLineRowsFlat(barSales),
+          "Bar - Depenses": purchaseRowsFlat(barPurchases),
+          "Bar - Depenses lignes": purchaseLineRowsFlat(barPurchases),
+          "Mecano - Ventes": saleRowsFlat(mecanoSales, "mecano"),
+          "Mecano - Ventes lignes": saleLineRowsFlat(mecanoSales),
+          "Mecano - Depenses": purchaseRowsFlat(mecanoPurchases),
+          "Mecano - Depenses lignes": purchaseLineRowsFlat(mecanoPurchases),
+          Salaires: salaryRowsFlat(salaryPayments),
+        },
+        `lostmc-sauvegarde-avant-purge-${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
+
+      btn.textContent = "Purge en cours...";
+      await purgeAllTransactions();
+      toast("Sauvegarde téléchargée et purge complète effectuée.", "success");
+    } catch (err) {
+      toast("Erreur pendant la purge : " + err.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Exporter une sauvegarde puis tout purger";
+    }
+  });
 
   init();
 </script>
