@@ -105,8 +105,15 @@ async function initBilan(domain) {
       domain === "mecano"
         ? `<p class="muted">Client : ${escapeHtml(sale.client_name || "—")} · Véhicule : ${escapeHtml(sale.vehicle_model || "—")} · Plaque : ${escapeHtml(sale.plate || "—")}</p>`
         : "";
+    const invoiceButton =
+      domain === "mecano" && typeof showInvoiceModal === "function"
+        ? `<button class="btn-secondary btn-sm" id="reopen-invoice-btn" type="button">Revoir la facture</button>`
+        : "";
     body.innerHTML = `
-      <h3 class="mt-0">Vente du ${formatDateTime(sale.sale_date)}</h3>
+      <div class="flex-between">
+        <h3 class="mt-0">Vente du ${formatDateTime(sale.sale_date)}</h3>
+        ${invoiceButton}
+      </div>
       ${extraInfo}
       ${sale.note ? `<p class="muted">Note : ${escapeHtml(sale.note)}</p>` : ""}
       <table>
@@ -128,6 +135,21 @@ async function initBilan(domain) {
       </table>
       <div class="ticket-total"><span>Total</span><span>${formatUSD(sale.total)}</span></div>
     `;
+    const reopenBtn = document.getElementById("reopen-invoice-btn");
+    if (reopenBtn) {
+      reopenBtn.addEventListener("click", () => {
+        showInvoiceModal({
+          docType: "Facture",
+          date: sale.sale_date,
+          client: sale.client_name,
+          vehicle: sale.vehicle_model,
+          plate: sale.plate,
+          lines: sale.lines,
+          total: sale.total,
+          note: sale.note,
+        });
+      });
+    }
     body.querySelectorAll("[data-line-id]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         if (!confirm("Supprimer cette ligne ? Le stock sera recrédité et le total recalculé.")) return;
