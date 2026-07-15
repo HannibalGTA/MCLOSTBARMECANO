@@ -47,7 +47,9 @@
       <div class="ticket" id="ticket">
         <div class="empty-state" id="ticket-empty">Le ticket est vide.</div>
       </div>
-      <div class="ticket-total"><span>Total</span><span id="ticket-total">$0.00</span></div>
+      <div class="ticket-total"><span>Total</span><span id="ticket-total">$0</span></div>
+      <label for="total-override" style="margin-top:10px;">Total à facturer (modifiable, ex : réduction)</label>
+      <input type="number" id="total-override" min="0" step="1" inputmode="numeric" />
       <label for="sale-note" style="margin-top:14px;">Note (optionnel)</label>
       <textarea id="sale-note" rows="2" placeholder="Détails de l'intervention..."></textarea>
 
@@ -99,11 +101,17 @@
 <script src="assets/auth.js"></script>
 <script src="assets/helpers.js"></script>
 <script src="assets/data.js"></script>
+<script src="assets/invoice.js"></script>
 <script>
   const domain = "mecano";
   let items = [];
   let cart = [];
   let profile = null;
+  let totalManuallySet = false;
+
+  document.getElementById("total-override").addEventListener("input", () => {
+    totalManuallySet = true;
+  });
 
   async function init() {
     profile = await requireRole(["mecano", "gestionnaire"]);
@@ -171,6 +179,9 @@
     const ticket = document.getElementById("ticket");
     const total = cart.reduce((s, l) => s + l.line_total, 0);
     document.getElementById("ticket-total").textContent = formatUSD(total);
+    if (!totalManuallySet) {
+      document.getElementById("total-override").value = Math.round(total);
+    }
     document.getElementById("validate-sale").disabled = cart.length === 0;
     document.getElementById("preview-devis").disabled = cart.length === 0;
 
@@ -199,50 +210,32 @@
     ticket.querySelectorAll("[data-minus]").forEach((b) => b.addEventListener("click", () => changeQty(b.dataset.minus, -1)));
   }
 
-  function fillInvoice(docTypeLabel) {
-    document.getElementById("inv-doctype").textContent = docTypeLabel;
-    document.getElementById("inv-date").textContent = formatDate(new Date());
-    document.getElementById("inv-client").textContent = document.getElementById("client-name").value.trim() || "—";
-    document.getElementById("inv-vehicle").textContent = document.getElementById("vehicle-model").value.trim() || "—";
-    document.getElementById("inv-plate").textContent = document.getElementById("plate").value.trim() || "—";
-    const tbody = document.getElementById("inv-lines");
-    tbody.innerHTML = cart
-      .map((l) => `<tr><td>${escapeHtml(l.item_name)}</td><td class="num">${l.quantity}</td><td class="num">${formatUSD(l.unit_price)}</td><td class="num">${formatUSD(l.line_total)}</td></tr>`)
-      .join("");
-    const total = cart.reduce((s, l) => s + l.line_total, 0);
-    document.getElementById("inv-total").textContent = formatUSD(total);
-    const note = document.getElementById("sale-note").value.trim();
-    document.getElementById("inv-note").textContent = note ? "Note : " + note : "";
-    document.getElementById("invoice-modal").style.display = "flex";
+  function currentInvoiceData(docTypeLabel, totalOverride) {
+    const total = totalOverride !== null && totalOverride !== undefined ? totalOverride : cart.reduce((s, l) => s + l.line_total, 0);
+    return {
+      docType: docTypeLabel,
+      date: new Date(),
+      client: document.getElementById("client-name").value.trim(),
+      vehicle: document.getElementById("vehicle-model").value.trim(),
+      plate: document.getElementById("plate").value.trim(),
+      lines: cart,
+      total,
+      note: document.getElementById("sale-note").value.trim(),
+    };
   }
 
-  document.getElementById("preview-devis").addEventListener("click", () => fillInvoice("Devis"));
-
-  document.getElementById("close-invoice").addEventListener("click", () => {
-    document.getElementById("invoice-modal").style.display = "none";
-  });
-
-  document.getElementById("print-invoice").addEventListener("click", () => window.print());
-
-  document.getElementById("copy-invoice").addEventListener("click", async () => {
-    const el = document.getElementById("invoice-content");
-    try {
-      const canvas = await html2canvas(el, { backgroundColor: "#efe7d8", scale: 2 });
-      canvas.toBlob(async (blob) => {
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-          toast("Image copiée dans le presse-papier.", "success");
-        } catch (err) {
-          toast("Copie impossible sur ce navigateur, utilise Imprimer.", "error");
-        }
-      });
-    } catch (err) {
-      toast("Erreur lors de la génération de l'image.", "error");
-    }
+  document.getElementById("preview-devis").addEventListener("click", () => {
+    const previewTotal = Math.round(parseFloat(document.getElementById("total-override").value)) || 0;
+    showInvoiceModal(currentInvoiceData("Devis", previewTotal));
   });
 
   document.getElementById("validate-sale").addEventListener("click", async () => {
     if (cart.length === 0) return;
+    const finalTotal = Math.round(parseFloat(document.getElementById("total-override").value)) || 0;
+
+    const confirmed = await confirmDialog("Confirmer la facture", `Enregistrer cette facture pour un total de ${formatUSD(finalTotal)} ?`);
+    if (!confirmed) return;
+
     const btn = document.getElementById("validate-sale");
     btn.disabled = true;
     btn.textContent = "Enregistrement...";
@@ -259,11 +252,13 @@
           note: document.getElementById("sale-note").value.trim() || null,
           sale_date: new Date().toISOString(),
         },
-        cart.map(({ max_stock, ...rest }) => rest)
+        cart.map(({ max_stock, ...rest }) => rest),
+        finalTotal
       );
       toast("Facture enregistrée.", "success");
-      fillInvoice("Facture");
+      showInvoiceModal(currentInvoiceData("Facture", finalTotal));
       cart = [];
+      totalManuallySet = false;
       document.getElementById("sale-note").value = "";
       renderTicket();
       await loadItems();
