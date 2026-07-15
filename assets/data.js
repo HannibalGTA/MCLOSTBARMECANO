@@ -142,22 +142,24 @@ async function deleteEmployee(id) {
   if (error) throw error;
 }
 
-// ---------- SALAIRES (par nom de vendeur) ----------
-async function listSellerPercentages() {
-  const { data, error } = await supabaseClient.from("seller_percentages").select("*");
+// ---------- SALAIRES (par nom de vendeur, séparés Bar / Mécano) ----------
+async function listSellerPercentages(domain) {
+  const { data, error } = await supabaseClient.from("seller_percentages").select("*").eq("domain", domain);
   if (error) throw error;
-  return data; // [{seller_name, percentage}]
+  return data; // [{seller_name, domain, percentage}]
 }
 
-async function setSellerPercentage(sellerName, percentage) {
+async function setSellerPercentage(sellerName, domain, percentage) {
   const { error } = await supabaseClient
     .from("seller_percentages")
-    .upsert({ seller_name: sellerName, percentage, updated_at: new Date().toISOString() });
+    .upsert({ seller_name: sellerName, domain, percentage, updated_at: new Date().toISOString() });
   if (error) throw error;
 }
 
-async function listSalaryPayments() {
-  const { data, error } = await supabaseClient.from("salary_payments").select("*").order("paid_at", { ascending: false });
+async function listSalaryPayments(domain) {
+  let q = supabaseClient.from("salary_payments").select("*").order("paid_at", { ascending: false });
+  if (domain) q = q.eq("domain", domain);
+  const { data, error } = await q;
   if (error) throw error;
   return data;
 }
