@@ -39,6 +39,47 @@ function confirmDialog(title, message) {
   });
 }
 
+/**
+ * Popup de confirmation renforcée pour une action destructrice et irréversible :
+ * le bouton de confirmation reste désactivé tant que l'utilisateur n'a pas tapé
+ * exactement le texte demandé. Renvoie une Promise<boolean>.
+ */
+function dangerConfirmDialog(title, message, requiredText) {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    backdrop.innerHTML = `
+      <div class="modal-box" style="max-width:460px;">
+        <h3 class="mt-0" style="color:var(--blood-bright);">⚠ ${escapeHtml(title)}</h3>
+        <p>${escapeHtml(message)}</p>
+        <label for="danger-confirm-input">Tape "${escapeHtml(requiredText)}" pour confirmer</label>
+        <input type="text" id="danger-confirm-input" autocomplete="off" />
+        <div class="flex-between" style="margin-top:6px;">
+          <button type="button" class="btn-ghost" id="danger-confirm-cancel">Annuler</button>
+          <button type="button" class="btn-danger" id="danger-confirm-ok" disabled>Purger définitivement</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+
+    const input = backdrop.querySelector("#danger-confirm-input");
+    const okBtn = backdrop.querySelector("#danger-confirm-ok");
+    input.addEventListener("input", () => {
+      okBtn.disabled = input.value.trim() !== requiredText;
+    });
+
+    function cleanup(result) {
+      backdrop.remove();
+      resolve(result);
+    }
+    okBtn.addEventListener("click", () => cleanup(true));
+    backdrop.querySelector("#danger-confirm-cancel").addEventListener("click", () => cleanup(false));
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) cleanup(false);
+    });
+  });
+}
+
 function formatDate(d) {
   const date = new Date(d);
   return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
