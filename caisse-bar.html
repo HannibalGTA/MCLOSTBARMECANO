@@ -61,11 +61,11 @@
     document.getElementById("grid-empty").style.display = items.length ? "none" : "block";
     for (const item of items) {
       const inCart = cart.find((c) => c.item_id === item.id);
-      const remaining = item.stock - (inCart ? inCart.quantity : 0);
+      const remaining = item.track_stock ? item.stock - (inCart ? inCart.quantity : 0) : Infinity;
       const card = document.createElement("div");
       card.className = "item-card" + (remaining <= 0 ? " out-of-stock" : "");
       card.innerHTML = `
-        <div class="item-stock-badge">${item.stock}</div>
+        ${item.track_stock ? `<div class="item-stock-badge">${item.stock}</div>` : ""}
         <div class="item-img-box">${item.image_data ? `<img src="${item.image_data}" />` : '<span class="muted" style="font-size:1.6rem;">?</span>'}</div>
         <div class="item-name">${escapeHtml(item.name)}</div>
         <div class="item-price">${formatUSD(item.sell_price)}</div>
@@ -80,7 +80,7 @@
   function addToCart(item) {
     const existing = cart.find((c) => c.item_id === item.id);
     if (existing) {
-      if (existing.quantity >= item.stock) {
+      if (item.track_stock && existing.quantity >= item.stock) {
         toast("Stock insuffisant pour cet article.", "error");
         return;
       }
@@ -93,7 +93,7 @@
         unit_price: item.sell_price,
         quantity: 1,
         line_total: item.sell_price,
-        max_stock: item.stock,
+        max_stock: item.track_stock ? item.stock : Infinity,
       });
     }
     renderTicket();
