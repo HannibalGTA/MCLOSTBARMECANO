@@ -1,170 +1,186 @@
-// =========================================================
-// AUTH — connexion Supabase, garde de rôle, navigation
-// =========================================================
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Caisse Bar — The Lost MC</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<nav class="topbar" id="app-nav"></nav>
 
-/**
- * Tente une connexion pour le rôle donné avec le mot de passe fourni.
- * Renvoie {ok:true, role} ou {ok:false, error}
- */
-async function loginAs(role, password) {
-  const email = ROLE_EMAILS[role];
-  if (!email) return { ok: false, error: "Rôle inconnu." };
+<div class="page-wrap">
+  <h1>Caisse — Bar</h1>
+  <p class="muted">Clique sur un article pour l'ajouter à la vente en cours.</p>
 
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) return { ok: false, error: "Mot de passe incorrect." };
-
-  // Vérifie que le profil correspond bien au rôle demandé (sécurité supplémentaire)
-  const profile = await getCurrentProfile();
-  if (!profile || profile.role !== role) {
-    await supabaseClient.auth.signOut();
-    return { ok: false, error: "Ce compte n'est pas configuré pour ce rôle." };
-  }
-  return { ok: true, role: profile.role };
-}
-
-/**
- * Récupère le jeton d'accès (JWT) de la session en cours, nécessaire pour appeler
- * la fonction serveur de changement de mot de passe.
- */
-async function getAccessToken() {
-  const { data } = await supabaseClient.auth.getSession();
-  return data?.session?.access_token || null;
-}
-
-/**
- * Nom/pseudo du joueur derrière ce navigateur (distinct du rôle partagé).
- * Stocké en sessionStorage : propre à cet onglet/cette session de connexion,
- * ce qui permet à plusieurs barmans (ou mécanos...) connectés en même temps
- * avec le même compte de rôle d'apparaître sous leur propre nom en caisse et en comptabilité.
- */
-function getStaffName() {
-  return sessionStorage.getItem("lostmc_staff_name") || "";
-}
-function setStaffName(name) {
-  sessionStorage.setItem("lostmc_staff_name", name || "");
-}
-
-/**
- * Nom à utiliser comme "vendeur" sur une vente : le pseudo saisi si présent, sinon le rôle.
- */
-function sellerDisplayName(profile) {
-  const staff = getStaffName();
-  return staff ? staff : ROLE_LABELS[profile.role];
-}
-
-/**
- * Appelle la fonction serveur "change-password" (Supabase Edge Function) pour modifier
- * le mot de passe d'un des 4 comptes de rôle. Réservé au gestionnaire (vérifié aussi côté serveur).
- */
-async function changeRolePassword(targetRole, newPassword) {
-  const token = await getAccessToken();
-  if (!token) return { ok: false, error: "Session expirée, reconnecte-toi." };
-
-  try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/change-password`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        apikey: SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ target_role: targetRole, new_password: newPassword }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: data.error || "Erreur serveur." };
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: "Impossible de contacter le serveur." };
-  }
-}
-async function logout() {
-  await supabaseClient.auth.signOut();
-  setStaffName("");
-  window.location.href = "index.html";
-}
-
-/**
- * Récupère le profil (role, display_name) de l'utilisateur connecté.
- */
-async function getCurrentProfile() {
-  const { data: sessionData } = await supabaseClient.auth.getSession();
-  const session = sessionData?.session;
-  if (!session) return null;
-
-  const { data, error } = await supabaseClient
-    .from("profiles")
-    .select("id, role, display_name")
-    .eq("id", session.user.id)
-    .single();
-
-  if (error || !data) return null;
-  return data;
-}
-
-/**
- * A appeler en haut de chaque page protégée.
- * allowedRoles: tableau des rôles autorisés à voir cette page.
- * Redirige vers index.html si non connecté ou rôle non autorisé.
- * Renvoie le profil si tout est ok.
- */
-async function requireRole(allowedRoles) {
-  const profile = await getCurrentProfile();
-  if (!profile) {
-    window.location.href = "index.html";
-    return null;
-  }
-  if (!allowedRoles.includes(profile.role)) {
-    window.location.href = "acces-refuse.html";
-    return null;
-  }
-  renderNav(profile);
-  return profile;
-}
-
-/**
- * Construit la barre de navigation en fonction du rôle connecté.
- */
-function renderNav(profile) {
-  const nav = document.getElementById("app-nav");
-  if (!nav) return;
-
-  const links = [];
-  const role = profile.role;
-
-  if (role === "barman" || role === "gestionnaire") {
-    links.push({ href: "caisse-bar.html", label: "Caisse Bar" });
-  }
-  if (role === "mecano" || role === "gestionnaire") {
-    links.push({ href: "caisse-mecano.html", label: "Caisse Mécano" });
-  }
-  if (role === "gestionnaire" || role === "superviseur") {
-    links.push({ href: "bilan-bar.html", label: "Bilan Bar" });
-    links.push({ href: "bilan-mecano.html", label: "Bilan Mécano" });
-  }
-  if (role === "gestionnaire") {
-    links.push({ href: "achats.html", label: "Achats" });
-    links.push({ href: "admin.html", label: "Administration" });
-  }
-
-  const here = window.location.pathname.split("/").pop();
-  const staffName = getStaffName();
-  nav.innerHTML = `
-    <div class="nav-brand">
-      <span class="nav-brand-top">THE LOST MC</span>
-      <span class="nav-brand-bottom">Gestion Bar &amp; Garage</span>
+  <div class="grid-2" style="grid-template-columns: 2fr 1fr; align-items:start;">
+    <div class="card">
+      <div class="card-title"><h2>Articles</h2></div>
+      <div class="item-grid" id="item-grid"></div>
+      <div class="empty-state" id="grid-empty" style="display:none;">Aucun article disponible. Demande au gestionnaire d'en créer.</div>
     </div>
-    <div class="nav-links">
-      ${links
-        .map(
-          (l) =>
-            `<a href="${l.href}" class="${l.href === here ? "active" : ""}">${l.label}</a>`
-        )
-        .join("")}
+
+    <div class="card">
+      <div class="card-title"><h2>Vente en cours</h2></div>
+      <div class="ticket" id="ticket">
+        <div class="empty-state" id="ticket-empty">Le ticket est vide.</div>
+      </div>
+      <div class="ticket-total"><span>Total</span><span id="ticket-total">$0.00</span></div>
+      <label for="sale-note" style="margin-top:14px;">Note (optionnel)</label>
+      <textarea id="sale-note" rows="2" placeholder="Ex : table 4, offert au client..."></textarea>
+      <button class="btn-primary" id="validate-sale" style="width:100%;" disabled>Valider la vente</button>
     </div>
-    <div class="nav-user">
-      <span>${ROLE_LABELS[role]}${staffName ? " — " + escapeHtml(staffName) : ""}</span>
-      <button id="logout-btn" class="btn-ghost">Déconnexion</button>
-    </div>
-  `;
-  document.getElementById("logout-btn").addEventListener("click", logout);
-}
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/helpers.js"></script>
+<script src="assets/data.js"></script>
+<script>
+  const domain = "bar";
+  let items = [];
+  let cart = []; // {item_id, item_name, unit_price, quantity, max_stock}
+  let profile = null;
+
+  async function init() {
+    profile = await requireRole(["barman", "gestionnaire"]);
+    if (!profile) return;
+    await loadItems();
+  }
+
+  async function loadItems() {
+    items = await listItems(domain, { onlyActive: true });
+    renderGrid();
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById("item-grid");
+    grid.innerHTML = "";
+    document.getElementById("grid-empty").style.display = items.length ? "none" : "block";
+    for (const item of items) {
+      const inCart = cart.find((c) => c.item_id === item.id);
+      const remaining = item.stock - (inCart ? inCart.quantity : 0);
+      const card = document.createElement("div");
+      card.className = "item-card" + (remaining <= 0 ? " out-of-stock" : "");
+      card.innerHTML = `
+        <div class="item-stock-badge">${item.stock}</div>
+        <div class="item-img-box">${item.image_data ? `<img src="${item.image_data}" />` : '<span class="muted" style="font-size:1.6rem;">?</span>'}</div>
+        <div class="item-name">${escapeHtml(item.name)}</div>
+        <div class="item-price">${formatUSD(item.sell_price)}</div>
+      `;
+      if (remaining > 0) {
+        card.addEventListener("click", () => addToCart(item));
+      }
+      grid.appendChild(card);
+    }
+  }
+
+  function addToCart(item) {
+    const existing = cart.find((c) => c.item_id === item.id);
+    if (existing) {
+      if (existing.quantity >= item.stock) {
+        toast("Stock insuffisant pour cet article.", "error");
+        return;
+      }
+      existing.quantity += 1;
+      existing.line_total = existing.quantity * existing.unit_price;
+    } else {
+      cart.push({
+        item_id: item.id,
+        item_name: item.name,
+        unit_price: item.sell_price,
+        quantity: 1,
+        line_total: item.sell_price,
+        max_stock: item.stock,
+      });
+    }
+    renderTicket();
+    renderGrid();
+  }
+
+  function changeQty(itemId, delta) {
+    const line = cart.find((c) => c.item_id === itemId);
+    if (!line) return;
+    const newQty = line.quantity + delta;
+    if (newQty <= 0) {
+      cart = cart.filter((c) => c.item_id !== itemId);
+    } else if (newQty > line.max_stock) {
+      toast("Stock insuffisant.", "error");
+      return;
+    } else {
+      line.quantity = newQty;
+      line.line_total = newQty * line.unit_price;
+    }
+    renderTicket();
+    renderGrid();
+  }
+
+  function renderTicket() {
+    const ticket = document.getElementById("ticket");
+    const total = cart.reduce((s, l) => s + l.line_total, 0);
+    document.getElementById("ticket-total").textContent = formatUSD(total);
+    document.getElementById("validate-sale").disabled = cart.length === 0;
+
+    if (cart.length === 0) {
+      ticket.innerHTML = '<div class="empty-state" id="ticket-empty">Le ticket est vide.</div>';
+      return;
+    }
+
+    ticket.innerHTML = cart
+      .map(
+        (l) => `
+      <div class="ticket-line">
+        <div>
+          <div>${escapeHtml(l.item_name)}</div>
+          <div class="muted mono" style="font-size:0.75rem;">${formatUSD(l.unit_price)} / unité</div>
+        </div>
+        <div class="qty-stepper">
+          <button type="button" class="btn-ghost btn-sm" data-minus="${l.item_id}">−</button>
+          <span class="mono">${l.quantity}</span>
+          <button type="button" class="btn-ghost btn-sm" data-plus="${l.item_id}">+</button>
+        </div>
+        <div class="mono" style="width:70px;text-align:right;">${formatUSD(l.line_total)}</div>
+      </div>
+    `
+      )
+      .join("");
+
+    ticket.querySelectorAll("[data-plus]").forEach((b) => b.addEventListener("click", () => changeQty(b.dataset.plus, 1)));
+    ticket.querySelectorAll("[data-minus]").forEach((b) => b.addEventListener("click", () => changeQty(b.dataset.minus, -1)));
+  }
+
+  document.getElementById("validate-sale").addEventListener("click", async () => {
+    if (cart.length === 0) return;
+    const btn = document.getElementById("validate-sale");
+    btn.disabled = true;
+    btn.textContent = "Validation...";
+    try {
+      await createSale(
+        domain,
+        {
+          seller_id: profile.id,
+          seller_name: sellerDisplayName(profile),
+          note: document.getElementById("sale-note").value.trim() || null,
+          sale_date: new Date().toISOString(),
+        },
+        cart.map(({ max_stock, ...rest }) => rest)
+      );
+      toast("Vente enregistrée.", "success");
+      cart = [];
+      document.getElementById("sale-note").value = "";
+      renderTicket();
+      await loadItems();
+    } catch (err) {
+      toast("Erreur : " + err.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Valider la vente";
+    }
+  });
+
+  init();
+</script>
+</body>
+</html>
