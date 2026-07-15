@@ -142,7 +142,20 @@ async function deleteEmployee(id) {
   if (error) throw error;
 }
 
-// ---------- SALAIRES ----------
+// ---------- SALAIRES (par nom de vendeur) ----------
+async function listSellerPercentages() {
+  const { data, error } = await supabaseClient.from("seller_percentages").select("*");
+  if (error) throw error;
+  return data; // [{seller_name, percentage}]
+}
+
+async function setSellerPercentage(sellerName, percentage) {
+  const { error } = await supabaseClient
+    .from("seller_percentages")
+    .upsert({ seller_name: sellerName, percentage, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
 async function listSalaryPayments() {
   const { data, error } = await supabaseClient.from("salary_payments").select("*").order("paid_at", { ascending: false });
   if (error) throw error;
