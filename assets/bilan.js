@@ -34,16 +34,16 @@ async function initBilan(domain) {
     tbody.innerHTML = "";
     let stockValue = 0;
     for (const item of items) {
-      const value = item.stock * item.buy_price;
+      const value = item.track_stock ? item.stock * item.buy_price : 0;
       stockValue += value;
-      const low = item.stock <= 3;
+      const low = item.track_stock && item.stock <= 3;
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${escapeHtml(item.name)}</td>
-        <td class="num">${item.stock} ${low ? '<span class="badge badge-low">bas</span>' : ""}</td>
+        <td>${escapeHtml(item.name)} ${!item.track_stock ? '<span class="badge muted" style="border:1px solid #444;">prestation</span>' : ""}</td>
+        <td class="num">${item.track_stock ? item.stock + (low ? ' <span class="badge badge-low">bas</span>' : "") : '<span class="muted">Illimité</span>'}</td>
         <td class="num">${formatUSD(item.buy_price)}</td>
         <td class="num">${formatUSD(item.sell_price)}</td>
-        <td class="num">${formatUSD(value)}</td>
+        <td class="num">${item.track_stock ? formatUSD(value) : '<span class="muted">—</span>'}</td>
       `;
       tbody.appendChild(tr);
     }
