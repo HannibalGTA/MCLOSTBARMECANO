@@ -251,7 +251,7 @@
         domain,
         {
           seller_id: profile.id,
-          seller_name: profile.display_name || "Mécano",
+          seller_name: sellerDisplayName(profile),
           client_name: document.getElementById("client-name").value.trim() || null,
           plate: document.getElementById("plate").value.trim() || null,
           vehicle_model: document.getElementById("vehicle-model").value.trim() || null,
