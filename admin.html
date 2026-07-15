@@ -21,6 +21,12 @@
     <button class="role-btn" id="tab-mecano" data-domain="mecano">Articles Mécano</button>
   </div>
 
+  <div class="card">
+    <div class="card-title"><h2>Accès — mots de passe des 4 profils</h2></div>
+    <p class="muted" style="margin-top:-6px;">Modifie ici le mot de passe utilisé pour se connecter à chaque profil. Les changements sont immédiats.</p>
+    <div id="password-rows"></div>
+  </div>
+
   <div class="grid-2">
     <div class="card">
       <div class="card-title"><h2 id="form-title">Nouvel article — Bar</h2></div>
@@ -89,6 +95,53 @@
     const profile = await requireRole(["gestionnaire"]);
     if (!profile) return;
     await refreshTable();
+    renderPasswordRows();
+  }
+
+  function renderPasswordRows() {
+    const wrap = document.getElementById("password-rows");
+    const roles = ["barman", "mecano", "gestionnaire", "superviseur"];
+    wrap.innerHTML = roles
+      .map(
+        (role) => `
+      <div class="field-row" style="align-items:flex-end;" data-role-row="${role}">
+        <div style="flex:0 0 140px;">
+          <label style="margin-bottom:10px;">${ROLE_LABELS[role]}</label>
+        </div>
+        <div>
+          <label for="pwd-${role}">Nouveau mot de passe</label>
+          <input type="password" id="pwd-${role}" placeholder="8 caractères minimum" autocomplete="new-password" />
+        </div>
+        <div style="flex:0 0 140px;">
+          <button type="button" class="btn-secondary" data-action="save-pwd" data-role="${role}" style="width:100%;margin-bottom:14px;">Modifier</button>
+        </div>
+      </div>
+    `
+      )
+      .join("");
+
+    wrap.querySelectorAll('[data-action="save-pwd"]').forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const role = btn.dataset.role;
+        const input = document.getElementById(`pwd-${role}`);
+        const newPassword = input.value;
+        if (!newPassword || newPassword.length < 8) {
+          toast("Le mot de passe doit contenir au moins 8 caractères.", "error");
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = "...";
+        const result = await changeRolePassword(role, newPassword);
+        if (result.ok) {
+          toast(`Mot de passe ${ROLE_LABELS[role]} mis à jour.`, "success");
+          input.value = "";
+        } else {
+          toast("Erreur : " + result.error, "error");
+        }
+        btn.disabled = false;
+        btn.textContent = "Modifier";
+      });
+    });
   }
 
   document.getElementById("tab-bar").addEventListener("click", () => switchDomain("bar"));
