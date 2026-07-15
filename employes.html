@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Employés — The Lost MC</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<nav class="topbar" id="app-nav"></nav>
+
+<div class="page-wrap">
+  <h1>Employés</h1>
+  <p class="muted">Liste du personnel du Bar et du Garage. La création et la modification se font depuis la page Administration.</p>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Nom</th><th>Prénom</th><th>N°</th><th>Service</th><th>Rôle</th><th>Début contrat</th><th>Contrat</th></tr>
+      </thead>
+      <tbody id="employees-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="employees-empty" style="display:none;">Aucun employé enregistré pour le moment.</div>
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/helpers.js"></script>
+<script src="assets/data.js"></script>
+<script>
+  async function init() {
+    const profile = await requireRole(["gestionnaire", "superviseur"]);
+    if (!profile) return;
+    await refreshEmployees();
+  }
+
+  async function refreshEmployees() {
+    const employees = await listEmployees();
+    const tbody = document.getElementById("employees-tbody");
+    const empty = document.getElementById("employees-empty");
+    tbody.innerHTML = "";
+    empty.style.display = employees.length ? "none" : "block";
+
+    for (const emp of employees) {
+      const service = emp.works_bar && emp.works_mecano ? "Bar + Garage" : emp.works_bar ? "Bar" : emp.works_mecano ? "Garage" : "—";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(emp.last_name)} ${!emp.active ? '<span class="badge muted" style="border:1px solid #444;">inactif</span>' : ""}</td>
+        <td>${escapeHtml(emp.first_name)}</td>
+        <td class="mono">${escapeHtml(emp.employee_number)}</td>
+        <td>${service}</td>
+        <td>${escapeHtml(emp.job_role || "—")}</td>
+        <td>${emp.contract_start_date ? formatDate(emp.contract_start_date) : "—"}</td>
+        <td>${emp.contract_file_data ? `<a href="${emp.contract_file_data}" download="${escapeHtml(emp.contract_file_name || "contrat")}" class="btn-secondary btn-sm" style="text-decoration:none;display:inline-block;">Voir le contrat</a>` : '<span class="muted">Aucun</span>'}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>

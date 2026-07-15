@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Salaires — The Lost MC</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<nav class="topbar" id="app-nav"></nav>
+
+<div class="page-wrap">
+  <h1>Salaires</h1>
+  <p class="muted">Marge générée par chaque employé sur la période, et versement du pourcentage défini dans sa fiche (page Administration).</p>
+
+  <div class="card">
+    <div class="flex-between">
+      <div class="field-row" style="max-width:460px;">
+        <div>
+          <label for="filter-from">Du</label>
+          <input type="date" id="filter-from" />
+        </div>
+        <div>
+          <label for="filter-to">Au</label>
+          <input type="date" id="filter-to" />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-ghost" id="filter-reset">Réinitialiser</button>
+        <button class="btn-primary" id="filter-apply">Calculer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><h2>Marge par employé sur la période</h2></div>
+    <p class="muted" style="margin-top:-6px;font-size:0.82rem;">La marge est calculée sur les ventes en caisse (bar + garage) attribuées au pseudo enregistré dans la fiche employé. Si un total a été réduit manuellement en caisse, la marge par ligne n'en tient pas compte (légère surestimation possible).</p>
+    <table>
+      <thead><tr><th>Employé</th><th>Service</th><th class="num">Marge générée</th><th class="num">%</th><th class="num">Salaire à verser</th><th></th></tr></thead>
+      <tbody id="margins-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="margins-empty" style="display:none;">Aucun employé actif.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><h2>Historique des versements</h2></div>
+    <table>
+      <thead><tr><th>Date</th><th>Employé</th><th>Période</th><th class="num">Marge</th><th class="num">%</th><th class="num">Montant versé</th><th></th></tr></thead>
+      <tbody id="payments-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="payments-empty" style="display:none;">Aucun versement enregistré.</div>
+    <div class="ticket-total"><span>Total versé (tous temps)</span><span id="payments-total">$0</span></div>
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script src="assets/helpers.js"></script>
+<script src="assets/data.js"></script>
+<script>
+  let profile = null;
+  let employees = [];
+  let currentFrom = null;
+  let currentTo = null;
+  let marginsByEmployee = {}; // employee.id -> margin
+
+  async function init() {
+    profile = await requireRole(["gestionnaire"]);
+    if (!profile) return;
+    employees = await listEmployees({ onlyActive: true });
+    await recompute();
+    await refreshPayments();
+  }
+
+  document.getElementById("filter-apply").addEventListener("click", recompute);
+  document.getElementById("filter-reset").addEventListener("click", () => {
+    document.getElementById("filter-from").value = "";
+    document.getElementById("filter-to").value = "";
+    recompute();
+  });
+
+  async function recompute() {
+    const fromInput = document.getElementById("filter-from").value;
+    const toInput = document.getElementById("filter-to").value;
+    currentFrom = fromInput ? new Date(fromInput + "T00:00:00").toISOString() : null;
+    currentTo = toInput ? new Date(toInput + "T23:59:59").toISOString() : null;
+
+    const [barSales, mecanoSales] = await Promise.all([
+      listSales("bar", { from: currentFrom, to: currentTo }),
+      listSales("mecano", { from: currentFrom, to: currentTo }),
+    ]);
+    const allSales = [...barSales, ...mecanoSales];
+
+    const marginByNickname = {};
+    for (const sale of allSales) {
+      const key = (sale.seller_name || "").trim().toLowerCase();
+      if (!key) continue;
+      let margin = 0;
+      for (const line of sale.lines || []) {
+        margin += (Number(line.unit_price) - Number(line.buy_price || 0)) * Number(line.quantity);
+      }
+      marginByNickname[key] = (marginByNickname[key] || 0) + margin;
+    }
+
+    marginsByEmployee = {};
+    for (const emp of employees) {
+      const key = (emp.staff_nickname || "").trim().toLowerCase();
+      marginsByEmployee[emp.id] = marginByNickname[key] || 0;
+    }
+
+    renderMargins();
+  }
+
+  function renderMargins() {
+    const tbody = document.getElementById("margins-tbody");
+    const empty = document.getElementById("margins-empty");
+    tbody.innerHTML = "";
+    empty.style.display = employees.length ? "none" : "block";
+
+    for (const emp of employees) {
+      const service = emp.works_bar && emp.works_mecano ? "Bar + Garage" : emp.works_bar ? "Bar" : emp.works_mecano ? "Garage" : "—";
+      const margin = marginsByEmployee[emp.id] || 0;
+      const salary = Math.round((margin * emp.salary_percentage) / 100);
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(emp.first_name)} ${escapeHtml(emp.last_name)}</td>
+        <td>${service}</td>
+        <td class="num">${formatUSD(margin)}</td>
+        <td class="num">${emp.salary_percentage}%</td>
+        <td class="num">${formatUSD(salary)}</td>
+        <td><button class="btn-primary btn-sm" data-action="pay" data-id="${emp.id}" ${salary <= 0 ? "disabled" : ""}>Verser le salaire</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    tbody.querySelectorAll('[data-action="pay"]').forEach((btn) => {
+      btn.addEventListener("click", () => paySalary(btn.dataset.id));
+    });
+  }
+
+  async function paySalary(employeeId) {
+    const emp = employees.find((e) => e.id === employeeId);
+    if (!emp) return;
+    const margin = marginsByEmployee[emp.id] || 0;
+    const salary = Math.round((margin * emp.salary_percentage) / 100);
+    if (salary <= 0) return;
+
+    const fromLabel = currentFrom ? formatDate(currentFrom) : "le début";
+    const toLabel = currentTo ? formatDate(currentTo) : "aujourd'hui";
+    const confirmed = await confirmDialog(
+      "Confirmer le versement",
+      `Verser ${formatUSD(salary)} à ${emp.first_name} ${emp.last_name} pour la période du ${fromLabel} au ${toLabel} ?`
+    );
+    if (!confirmed) return;
+
+    try {
+      await createSalaryPayment({
+        employee_id: emp.id,
+        employee_name: `${emp.first_name} ${emp.last_name}`,
+        period_from: currentFrom,
+        period_to: currentTo,
+        margin_amount: Math.round(margin),
+        percentage: emp.salary_percentage,
+        amount: salary,
+        paid_by: profile.id,
+        paid_at: new Date().toISOString(),
+      });
+      toast("Salaire versé et enregistré.", "success");
+      await refreshPayments();
+    } catch (err) {
+      toast("Erreur : " + err.message, "error");
+    }
+  }
+
+  async function refreshPayments() {
+    const payments = await listSalaryPayments();
+    const tbody = document.getElementById("payments-tbody");
+    const empty = document.getElementById("payments-empty");
+    tbody.innerHTML = "";
+    empty.style.display = payments.length ? "none" : "block";
+
+    let total = 0;
+    for (const p of payments) total += Number(p.amount);
+    document.getElementById("payments-total").textContent = formatUSD(total);
+
+    for (const p of payments) {
+      const period = p.period_from || p.period_to ? `${p.period_from ? formatDate(p.period_from) : "…"} → ${p.period_to ? formatDate(p.period_to) : "…"}` : "Toute la période";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${formatDateTime(p.paid_at)}</td>
+        <td>${escapeHtml(p.employee_name)}</td>
+        <td>${period}</td>
+        <td class="num">${formatUSD(p.margin_amount)}</td>
+        <td class="num">${p.percentage}%</td>
+        <td class="num">${formatUSD(p.amount)}</td>
+        <td><button class="btn-danger btn-sm" data-action="delete" data-id="${p.id}">Supprimer</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    tbody.querySelectorAll('[data-action="delete"]').forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const confirmed = await confirmDialog("Supprimer ce versement", "Supprimer cette ligne de versement de salaire ? Cette action ne rembourse rien automatiquement, elle corrige juste la comptabilité.");
+        if (!confirmed) return;
+        try {
+          await deleteSalaryPayment(btn.dataset.id);
+          toast("Versement supprimé.", "success");
+          await refreshPayments();
+        } catch (err) {
+          toast("Erreur : " + err.message, "error");
+        }
+      });
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>
