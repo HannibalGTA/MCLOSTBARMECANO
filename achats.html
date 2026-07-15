@@ -35,11 +35,11 @@
     <div class="grid-3">
       <div>
         <label for="line-qty">Quantité</label>
-        <input type="number" id="line-qty" min="0.01" step="0.01" value="1" />
+        <input type="number" id="line-qty" min="1" step="1" inputmode="numeric" value="1" />
       </div>
       <div>
         <label for="line-price">Prix unitaire ($)</label>
-        <input type="number" id="line-price" min="0" step="0.01" />
+        <input type="number" id="line-price" min="0" step="1" inputmode="numeric" />
       </div>
       <div style="display:flex;align-items:flex-end;">
         <button type="button" class="btn-secondary" id="add-line" style="width:100%;margin-bottom:14px;">Ajouter la ligne</button>
@@ -49,7 +49,16 @@
     <div class="ticket" id="purchase-ticket" style="margin-bottom:16px;">
       <div class="empty-state" id="purchase-ticket-empty">Aucune ligne ajoutée.</div>
     </div>
-    <div class="ticket-total"><span>Total achat</span><span id="purchase-total">$0.00</span></div>
+    <div class="field-row" style="align-items:flex-end;">
+      <div>
+        <label>Total calculé</label>
+        <input type="text" id="purchase-total" class="mono" disabled />
+      </div>
+      <div>
+        <label for="purchase-total-override">Total à payer (modifiable)</label>
+        <input type="number" id="purchase-total-override" min="0" step="1" inputmode="numeric" />
+      </div>
+    </div>
 
     <label for="purchase-note" style="margin-top:14px;">Note (facultatif)</label>
     <textarea id="purchase-note" rows="2" placeholder="Ex : réappro fournisseur du samedi"></textarea>
@@ -84,6 +93,7 @@
   let catalog = [];
   let purchaseLines = [];
   let profile = null;
+  let purchaseTotalManuallySet = false;
 
   async function init() {
     profile = await requireRole(["gestionnaire"]);
@@ -95,11 +105,16 @@
   document.getElementById("tab-bar").addEventListener("click", () => switchDomain("bar"));
   document.getElementById("tab-mecano").addEventListener("click", () => switchDomain("mecano"));
 
+  document.getElementById("purchase-total-override").addEventListener("input", () => {
+    purchaseTotalManuallySet = true;
+  });
+
   async function switchDomain(domain) {
     currentDomain = domain;
     document.getElementById("tab-bar").classList.toggle("selected", domain === "bar");
     document.getElementById("tab-mecano").classList.toggle("selected", domain === "mecano");
     purchaseLines = [];
+    purchaseTotalManuallySet = false;
     renderPurchaseTicket();
     await loadCatalog();
   }
@@ -121,8 +136,8 @@
   document.getElementById("add-line").addEventListener("click", () => {
     const itemId = document.getElementById("line-item").value || null;
     const label = document.getElementById("line-label").value.trim();
-    const qty = parseFloat(document.getElementById("line-qty").value);
-    const price = parseFloat(document.getElementById("line-price").value);
+    const qty = Math.round(parseFloat(document.getElementById("line-qty").value));
+    const price = Math.round(parseFloat(document.getElementById("line-price").value));
 
     if (!label) return toast("Indique un libellé pour cette dépense.", "error");
     if (!qty || qty <= 0) return toast("La quantité doit être positive.", "error");
@@ -147,7 +162,10 @@
   function renderPurchaseTicket() {
     const ticket = document.getElementById("purchase-ticket");
     const total = purchaseLines.reduce((s, l) => s + l.line_total, 0);
-    document.getElementById("purchase-total").textContent = formatUSD(total);
+    document.getElementById("purchase-total").value = formatUSD(total);
+    if (!purchaseTotalManuallySet) {
+      document.getElementById("purchase-total-override").value = Math.round(total);
+    }
     document.getElementById("save-purchase").disabled = purchaseLines.length === 0;
 
     if (purchaseLines.length === 0) {
@@ -177,6 +195,11 @@
 
   document.getElementById("save-purchase").addEventListener("click", async () => {
     if (purchaseLines.length === 0) return;
+    const finalTotal = Math.round(parseFloat(document.getElementById("purchase-total-override").value)) || 0;
+
+    const confirmed = await confirmDialog("Confirmer l'achat", `Enregistrer cet achat pour un total de ${formatUSD(finalTotal)} ?`);
+    if (!confirmed) return;
+
     const btn = document.getElementById("save-purchase");
     btn.disabled = true;
     btn.textContent = "Enregistrement...";
@@ -188,10 +211,12 @@
           note: document.getElementById("purchase-note").value.trim() || null,
           purchase_date: new Date().toISOString(),
         },
-        purchaseLines
+        purchaseLines,
+        finalTotal
       );
       toast("Achat enregistré, stock et comptabilité mis à jour.", "success");
       purchaseLines = [];
+      purchaseTotalManuallySet = false;
       document.getElementById("purchase-note").value = "";
       renderPurchaseTicket();
       await loadCatalog();
