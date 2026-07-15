@@ -119,3 +119,43 @@ async function deletePurchase(id) {
   const { error } = await supabaseClient.from("purchases").delete().eq("id", id);
   if (error) throw error;
 }
+
+// ---------- EMPLOYÉS ----------
+async function listEmployees({ onlyActive = false } = {}) {
+  let q = supabaseClient.from("employees").select("*").order("last_name");
+  if (onlyActive) q = q.eq("active", true);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+async function upsertEmployee(employee) {
+  const { data, error } = await supabaseClient.from("employees").upsert({ ...employee, updated_at: new Date().toISOString() }).select();
+  if (error) throw error;
+  return data[0];
+}
+
+async function deleteEmployee(id) {
+  // Le fichier de contrat est stocké directement dans la ligne (comme les images d'articles) :
+  // le supprimer supprime donc aussi le fichier, aucune action séparée n'est nécessaire.
+  const { error } = await supabaseClient.from("employees").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---------- SALAIRES ----------
+async function listSalaryPayments() {
+  const { data, error } = await supabaseClient.from("salary_payments").select("*").order("paid_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+async function createSalaryPayment(payment) {
+  const { data, error } = await supabaseClient.from("salary_payments").insert(payment).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteSalaryPayment(id) {
+  const { error } = await supabaseClient.from("salary_payments").delete().eq("id", id);
+  if (error) throw error;
+}
