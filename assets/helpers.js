@@ -147,6 +147,28 @@ function resizeAndCenterImage(file, targetSize = 300) {
   });
 }
 
+/**
+ * Lit un fichier quelconque (PDF, image scannée, doc...) et le convertit en data URL base64,
+ * en refusant les fichiers dépassant maxBytes (poids du fichier original, pas de compression).
+ * @param {File} file
+ * @param {number} maxBytes
+ * @returns {Promise<{dataUrl:string, name:string, type:string}>}
+ */
+function readFileAsDataUrl(file, maxBytes) {
+  return new Promise((resolve, reject) => {
+    if (file.size > maxBytes) {
+      reject(new Error(`Fichier trop lourd (${Math.round(file.size / 1024)} Ko), limite : ${Math.round(maxBytes / 1024)} Ko.`));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => resolve({ dataUrl: e.target.result, name: file.name, type: file.type });
+    reader.onerror = () => reject(new Error("Impossible de lire ce fichier."));
+    reader.readAsDataURL(file);
+  });
+}
+
+const MAX_CONTRACT_BYTES = 100 * 1024;
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str ?? "";
