@@ -14,12 +14,31 @@
   --blood: #a4161a;
   --blood-bright: #d4232a;
   --brass: #c99a3d;
+  --mecano-orange: #d9722c;
+  --mecano-orange-bright: #f28c3f;
   --steel: #8a8d93;
   --line: #34343a;
   --ok: #4c9a5f;
   --font-display: "Rye", serif;
   --font-body: "Oswald", sans-serif;
   --font-mono: "Space Mono", monospace;
+
+  /* Couleur d'accent : doré par défaut (pages communes), rouge sur les pages Bar,
+     orange sur les pages Mécano (voir .theme-bar / .theme-mecano sur <body>) */
+  --accent: var(--brass);
+  --accent-bright: #e0b452;
+  --danger: var(--blood);
+  --danger-bright: var(--blood-bright);
+}
+
+body.theme-bar {
+  --accent: var(--blood);
+  --accent-bright: var(--blood-bright);
+}
+
+body.theme-mecano {
+  --accent: var(--mecano-orange);
+  --accent-bright: var(--mecano-orange-bright);
 }
 
 * { box-sizing: border-box; }
@@ -60,7 +79,7 @@ a { color: var(--brass); }
   gap: 14px;
   padding: 16px 24px;
   background: linear-gradient(180deg, var(--panel-raised), var(--panel));
-  border-bottom: 3px solid var(--blood);
+  border-bottom: 3px solid var(--accent);
   box-shadow: 0 4px 18px rgba(0,0,0,0.5);
 }
 
@@ -80,7 +99,7 @@ a { color: var(--brass); }
   border-radius: 3px;
 }
 .nav-links a:hover { color: var(--paper); border-color: var(--line); }
-.nav-links a.active { color: var(--ink); background: var(--brass); font-weight: 600; }
+.nav-links a.active { color: var(--ink); background: var(--accent); font-weight: 600; }
 
 .nav-user { display: flex; align-items: center; gap: 12px; font-size: 0.85rem; color: var(--paper-dim); }
 
@@ -122,14 +141,14 @@ button, .btn {
 }
 button:active { transform: translateY(1px); }
 
-.btn-primary { background: var(--blood); color: #fff; }
-.btn-primary:hover { background: var(--blood-bright); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-bright); }
 .btn-secondary { background: var(--brass); color: var(--ink); }
 .btn-secondary:hover { filter: brightness(1.08); }
 .btn-ghost { background: transparent; border: 1px solid var(--line); color: var(--paper-dim); }
 .btn-ghost:hover { border-color: var(--brass); color: var(--brass); }
-.btn-danger { background: transparent; border: 1px solid var(--blood); color: var(--blood-bright); }
-.btn-danger:hover { background: var(--blood); color: #fff; }
+.btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger-bright); }
+.btn-danger:hover { background: var(--danger); color: #fff; }
 .btn-sm { padding: 5px 10px; font-size: 0.7rem; }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -235,7 +254,7 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); }
   transition: border-color 0.15s ease, transform 0.1s ease;
   position: relative;
 }
-.item-card:hover { border-color: var(--brass); transform: translateY(-2px); }
+.item-card:hover { border-color: var(--accent); transform: translateY(-2px); }
 .item-card.out-of-stock { opacity: 0.45; cursor: not-allowed; }
 .item-card .item-img-box {
   width: 100%;
@@ -272,22 +291,40 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); }
 }
 .ticket-line { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 0.88rem; }
 .ticket-line:last-child { border-bottom: none; }
-.ticket-total { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 1.3rem; padding-top: 12px; margin-top: 8px; border-top: 2px solid var(--brass); color: var(--brass); }
+.ticket-total { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 1.3rem; padding-top: 12px; margin-top: 8px; border-top: 2px solid var(--accent); color: var(--accent); }
 .qty-stepper { display: flex; align-items: center; gap: 6px; }
 .qty-stepper button { padding: 2px 9px; font-size: 0.85rem; }
 
 /* ---------- Badges ---------- */
 .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .badge-bar { background: rgba(164,22,26,0.2); color: var(--blood-bright); }
-.badge-mecano { background: rgba(201,154,61,0.2); color: var(--brass); }
+.badge-mecano { background: rgba(217,114,44,0.2); color: var(--mecano-orange); }
 .badge-low { background: rgba(164,22,26,0.25); color: var(--blood-bright); }
+
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+.page-title-row h1 { margin: 0; }
+.page-header-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,0.5));
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .page-header-logo { width: 42px; height: 42px; }
+}
 
 /* ---------- Utility ---------- */
 .muted { color: var(--steel); }
 .mt-0 { margin-top: 0; }
 .flex-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .stat-box { background: var(--ink-soft); border: 1px solid var(--line); border-radius: 6px; padding: 16px; text-align: center; }
-.stat-box .num { font-family: var(--font-mono); font-size: 1.6rem; color: var(--brass); }
+.stat-box .num { font-family: var(--font-mono); font-size: 1.6rem; color: var(--accent); }
 .stat-box .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--steel); margin-top: 4px; }
 
 .empty-state { text-align: center; padding: 40px 20px; color: var(--steel); }
@@ -312,14 +349,14 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); }
   margin: 0 auto;
   font-family: var(--font-body);
 }
-.invoice-header { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid var(--blood); padding-bottom: 14px; margin-bottom: 16px; }
+.invoice-header { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid var(--mecano-orange); padding-bottom: 14px; margin-bottom: 16px; }
 .invoice-header img { width: 70px; height: 70px; object-fit: contain; }
 .invoice-header .biz-name { font-family: var(--font-display); font-size: 1.4rem; }
 .invoice-meta { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 14px; color: #333; }
 .invoice table { font-size: 0.85rem; }
-.invoice thead th { color: #7a1013; border-bottom: 2px solid #7a1013; }
+.invoice thead th { color: #9a4a12; border-bottom: 2px solid #9a4a12; }
 .invoice tbody td { border-bottom: 1px solid #ccc0a5; color: #1a1a1a; }
-.invoice-total { text-align: right; font-family: var(--font-mono); font-size: 1.3rem; margin-top: 14px; color: #7a1013; }
+.invoice-total { text-align: right; font-family: var(--font-mono); font-size: 1.3rem; margin-top: 14px; color: #9a4a12; }
 
 @media print {
   .no-print { display: none !important; }
