@@ -225,22 +225,11 @@
     );
     if (!confirmed) return;
 
+    let purchase = null;
     try {
-      await createSalaryPayment({
-        seller_name: displayName,
-        domain: currentDomain,
-        period_from: currentFrom,
-        period_to: currentTo,
-        margin_amount: Math.round(margin),
-        percentage: pct,
-        amount: salary,
-        paid_by: profile.id,
-        paid_at: new Date().toISOString(),
-      });
-
-      // Enregistre aussi la somme comme dépense dans le bilan du service concerné
+      // 1) Crée d'abord la dépense dans le bilan comptable du service concerné
       const periodLabel = `${fromLabel} au ${toLabel}`;
-      await createPurchase(
+      purchase = await createPurchase(
         {
           domain: currentDomain,
           buyer_id: profile.id,
@@ -259,9 +248,31 @@
         ]
       );
 
+      // 2) Puis le versement de salaire, lié à cette dépense (les deux se suppriment ensemble ensuite)
+      await createSalaryPayment({
+        seller_name: displayName,
+        domain: currentDomain,
+        period_from: currentFrom,
+        period_to: currentTo,
+        margin_amount: Math.round(margin),
+        percentage: pct,
+        amount: salary,
+        purchase_id: purchase.id,
+        paid_by: profile.id,
+        paid_at: new Date().toISOString(),
+      });
+
       toast("Salaire versé, enregistré et ajouté au bilan " + domainLabel + ".", "success");
       await refreshPayments();
     } catch (err) {
+      // Si le versement échoue après coup, on retire la dépense créée pour ne rien laisser en double
+      if (purchase) {
+        try {
+          await deletePurchase(purchase.id);
+        } catch (cleanupErr) {
+          // on laisse l'erreur d'origine remonter même si le nettoyage échoue
+        }
+      }
       toast("Erreur : " + err.message, "error");
     }
   }
@@ -296,7 +307,7 @@
       btn.addEventListener("click", async () => {
         const confirmed = await confirmDialog(
           "Supprimer ce versement",
-          "Supprimer cette ligne de versement de salaire ? Cela ne supprime pas automatiquement la ligne de dépense correspondante dans le bilan comptable — pense à la retirer aussi là-bas si besoin."
+          "Supprimer ce versement de salaire ? La dépense correspondante dans le bilan comptable sera supprimée automatiquement avec."
         );
         if (!confirmed) return;
         try {
