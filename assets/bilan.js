@@ -24,6 +24,38 @@ async function initBilan(domain) {
     refreshAll();
   });
 
+  const exportBtn = document.getElementById("export-sheet-btn");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", async () => {
+      exportBtn.disabled = true;
+      exportBtn.textContent = "Génération...";
+      try {
+        const [items, sales, purchases] = await Promise.all([
+          listItems(domain),
+          listSales(domain, { from: state.from, to: state.to }),
+          listPurchases({ domain, from: state.from, to: state.to }),
+        ]);
+        const label = domain === "bar" ? "Bar" : "Mecano";
+        downloadWorkbook(
+          {
+            Stock: stockRowsFlat(items),
+            Ventes: saleRowsFlat(sales, domain),
+            "Ventes - lignes": saleLineRowsFlat(sales),
+            Depenses: purchaseRowsFlat(purchases),
+            "Depenses - lignes": purchaseLineRowsFlat(purchases),
+          },
+          `lostmc-${label.toLowerCase()}-bilan-${new Date().toISOString().slice(0, 10)}.xlsx`
+        );
+        toast("Export généré, prêt à ouvrir dans Google Sheets.", "success");
+      } catch (err) {
+        toast("Erreur export : " + err.message, "error");
+      } finally {
+        exportBtn.disabled = false;
+        exportBtn.textContent = "Exporter (Google Sheet)";
+      }
+    });
+  }
+
   async function refreshAll() {
     await Promise.all([refreshStock(), refreshSales(), refreshPurchases()]);
   }
