@@ -6,6 +6,7 @@
 <title>Bilan Mécano — The Lost MC</title>
 <link rel="stylesheet" href="assets/style.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 <nav class="topbar" id="app-nav"></nav>
@@ -34,13 +35,13 @@
   </div>
 
   <div class="grid-3">
-    <div class="stat-box"><div class="num" id="stat-revenue">$0.00</div><div class="label">Chiffre d'affaires</div></div>
-    <div class="stat-box"><div class="num" id="stat-cost">$0.00</div><div class="label">Total achats</div></div>
-    <div class="stat-box"><div class="num" id="stat-margin">$0.00</div><div class="label">Marge</div></div>
+    <div class="stat-box"><div class="num" id="stat-revenue">$0</div><div class="label">Chiffre d'affaires</div></div>
+    <div class="stat-box"><div class="num" id="stat-cost">$0</div><div class="label">Total achats</div></div>
+    <div class="stat-box"><div class="num" id="stat-margin">$0</div><div class="label">Marge</div></div>
   </div>
   <div class="grid-2" style="margin-bottom:20px;">
     <div class="stat-box"><div class="num" id="stat-sales-count">0</div><div class="label">Ventes sur la période</div></div>
-    <div class="stat-box"><div class="num" id="stat-stock-value">$0.00</div><div class="label">Valeur du stock actuel</div></div>
+    <div class="stat-box"><div class="num" id="stat-stock-value">$0</div><div class="label">Valeur du stock actuel</div></div>
   </div>
 
   <div class="card">
@@ -79,10 +80,49 @@
   </div>
 </div>
 
+<div class="modal-backdrop no-print" id="invoice-modal" style="display:none;">
+  <div class="modal-box" style="max-width:600px;">
+    <div class="invoice" id="invoice-content">
+      <div class="invoice-header">
+        <img src="assets/MCmecano.png" alt="The Lost MC Garage" />
+        <div>
+          <div class="biz-name">THE LOST MC GARAGE</div>
+          <div style="font-size:0.8rem;color:#555;">Repair &amp; Service</div>
+        </div>
+      </div>
+      <div class="invoice-meta">
+        <div>
+          <div><strong>Document :</strong> <span id="inv-doctype">Facture</span></div>
+          <div><strong>Date :</strong> <span id="inv-date"></span></div>
+        </div>
+        <div style="text-align:right;">
+          <div><strong>Client :</strong> <span id="inv-client"></span></div>
+          <div><strong>Véhicule :</strong> <span id="inv-vehicle"></span></div>
+          <div><strong>Plaque :</strong> <span id="inv-plate"></span></div>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Article</th><th class="num">Qté</th><th class="num">Prix</th><th class="num">Total</th></tr></thead>
+        <tbody id="inv-lines"></tbody>
+      </table>
+      <div class="invoice-total">Total : <span id="inv-total"></span></div>
+      <div id="inv-note" style="margin-top:12px;font-size:0.82rem;color:#555;"></div>
+    </div>
+    <div class="flex-between no-print" style="margin-top:18px;">
+      <button class="btn-ghost" id="close-invoice">Fermer</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-secondary" id="copy-invoice">Copier l'image</button>
+        <button class="btn-primary" id="print-invoice">Imprimer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="assets/config.js"></script>
 <script src="assets/auth.js"></script>
 <script src="assets/helpers.js"></script>
 <script src="assets/data.js"></script>
+<script src="assets/invoice.js"></script>
 <script src="assets/bilan.js"></script>
 <script>
   initBilan("mecano");
