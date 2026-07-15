@@ -3,8 +3,40 @@
 // =========================================================
 
 function formatUSD(n) {
-  const v = Number(n) || 0;
-  return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const v = Math.round(Number(n) || 0);
+  return "$" + v.toLocaleString("en-US");
+}
+
+/**
+ * Affiche une popup de confirmation stylée (Oui / Annuler).
+ * Renvoie une Promise<boolean> : true si confirmé, false si annulé.
+ */
+function confirmDialog(title, message) {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    backdrop.innerHTML = `
+      <div class="modal-box" style="max-width:400px;text-align:center;">
+        <h3 class="mt-0">${escapeHtml(title)}</h3>
+        <p class="muted">${escapeHtml(message)}</p>
+        <div class="flex-between" style="margin-top:20px;justify-content:center;gap:12px;">
+          <button type="button" class="btn-ghost" id="confirm-dialog-cancel">Annuler</button>
+          <button type="button" class="btn-primary" id="confirm-dialog-ok">Confirmer</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+
+    function cleanup(result) {
+      backdrop.remove();
+      resolve(result);
+    }
+    backdrop.querySelector("#confirm-dialog-ok").addEventListener("click", () => cleanup(true));
+    backdrop.querySelector("#confirm-dialog-cancel").addEventListener("click", () => cleanup(false));
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) cleanup(false);
+    });
+  });
 }
 
 function formatDate(d) {
