@@ -174,3 +174,24 @@ async function deleteSalaryPayment(id) {
   const { error } = await supabaseClient.from("salary_payments").delete().eq("id", id);
   if (error) throw error;
 }
+
+// ---------- PURGE COMPLÈTE (zone dangereuse, admin) ----------
+/**
+ * Supprime TOUTES les ventes (bar + mécano), tous les achats/dépenses,
+ * et tous les versements de salaire. Les catalogues d'articles, les employés
+ * et les comptes de connexion ne sont jamais touchés.
+ * A n'appeler qu'après avoir généré et téléchargé la sauvegarde de sécurité.
+ */
+async function purgeAllTransactions() {
+  const NIL = "00000000-0000-0000-0000-000000000000";
+  const results = await Promise.allSettled([
+    supabaseClient.from("bar_sales").delete().neq("id", NIL),
+    supabaseClient.from("mecano_sales").delete().neq("id", NIL),
+    supabaseClient.from("purchases").delete().neq("id", NIL),
+    supabaseClient.from("salary_payments").delete().neq("id", NIL),
+  ]);
+  const failed = results.find((r) => r.status === "fulfilled" && r.value.error);
+  if (failed) throw failed.value.error;
+  const rejected = results.find((r) => r.status === "rejected");
+  if (rejected) throw rejected.reason;
+}
