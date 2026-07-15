@@ -12,7 +12,12 @@
 
 <div class="page-wrap">
   <h1>Salaires</h1>
-  <p class="muted">Marge générée par chaque vendeur (nom saisi à la connexion), tous services confondus. Le % se règle directement ici, par vendeur.</p>
+  <p class="muted">Marge générée par chaque vendeur (nom saisi à la connexion), séparée Bar / Mécano. Le % se règle directement ici. Un versement s'enregistre comme une dépense dans le bilan comptable correspondant.</p>
+
+  <div class="role-grid" style="grid-template-columns: 1fr 1fr; max-width:360px; margin-bottom:20px;">
+    <button class="role-btn selected" id="tab-bar" data-domain="bar">Bar</button>
+    <button class="role-btn" id="tab-mecano" data-domain="mecano">Mécano</button>
+  </div>
 
   <div class="card">
     <div class="flex-between">
@@ -34,8 +39,8 @@
   </div>
 
   <div class="card">
-    <div class="card-title"><h2>Marge par vendeur sur la période</h2></div>
-    <p class="muted" style="margin-top:-6px;font-size:0.82rem;">Calculée sur les ventes en caisse (bar + garage). Si un total a été réduit manuellement en caisse, la marge par ligne n'en tient pas compte (légère surestimation possible). Change le % puis clique "Enregistrer le %" pour le sauvegarder.</p>
+    <div class="card-title"><h2>Marge par vendeur — <span id="domain-label">Bar</span></h2></div>
+    <p class="muted" style="margin-top:-6px;font-size:0.82rem;">Si un total a été réduit manuellement en caisse, la marge par ligne n'en tient pas compte (légère surestimation possible). Change le % puis clique "Enregistrer le %" pour le sauvegarder.</p>
     <table>
       <thead><tr><th>Vendeur</th><th class="num">Marge générée</th><th class="num">%</th><th></th><th class="num">Salaire à verser</th><th></th></tr></thead>
       <tbody id="margins-tbody"></tbody>
@@ -44,13 +49,13 @@
   </div>
 
   <div class="card">
-    <div class="card-title"><h2>Historique des versements</h2></div>
+    <div class="card-title"><h2>Historique des versements — <span id="domain-label-2">Bar</span></h2></div>
     <table>
       <thead><tr><th>Date</th><th>Vendeur</th><th>Période</th><th class="num">Marge</th><th class="num">%</th><th class="num">Montant versé</th><th></th></tr></thead>
       <tbody id="payments-tbody"></tbody>
     </table>
     <div class="empty-state" id="payments-empty" style="display:none;">Aucun versement enregistré.</div>
-    <div class="ticket-total"><span>Total versé (tous temps)</span><span id="payments-total">$0</span></div>
+    <div class="ticket-total"><span>Total versé (tous temps, ce service)</span><span id="payments-total">$0</span></div>
   </div>
 </div>
 
@@ -60,6 +65,7 @@
 <script src="assets/data.js"></script>
 <script>
   let profile = null;
+  let currentDomain = "bar";
   let currentFrom = null;
   let currentTo = null;
   let marginsBySeller = {}; // normalizedKey -> margin
@@ -77,6 +83,20 @@
     await refreshPayments();
   }
 
+  document.getElementById("tab-bar").addEventListener("click", () => switchDomain("bar"));
+  document.getElementById("tab-mecano").addEventListener("click", () => switchDomain("mecano"));
+
+  async function switchDomain(domain) {
+    currentDomain = domain;
+    document.getElementById("tab-bar").classList.toggle("selected", domain === "bar");
+    document.getElementById("tab-mecano").classList.toggle("selected", domain === "mecano");
+    const label = domain === "bar" ? "Bar" : "Mécano";
+    document.getElementById("domain-label").textContent = label;
+    document.getElementById("domain-label-2").textContent = label;
+    await recompute();
+    await refreshPayments();
+  }
+
   document.getElementById("filter-apply").addEventListener("click", recompute);
   document.getElementById("filter-reset").addEventListener("click", () => {
     document.getElementById("filter-from").value = "";
@@ -90,12 +110,10 @@
     currentFrom = fromInput ? new Date(fromInput + "T00:00:00").toISOString() : null;
     currentTo = toInput ? new Date(toInput + "T23:59:59").toISOString() : null;
 
-    const [barSales, mecanoSales, percentageRows] = await Promise.all([
-      listSales("bar", { from: currentFrom, to: currentTo }),
-      listSales("mecano", { from: currentFrom, to: currentTo }),
-      listSellerPercentages(),
+    const [sales, percentageRows] = await Promise.all([
+      listSales(currentDomain, { from: currentFrom, to: currentTo }),
+      listSellerPercentages(currentDomain),
     ]);
-    const allSales = [...barSales, ...mecanoSales];
 
     percentagesBySeller = {};
     for (const row of percentageRows) {
@@ -104,9 +122,9 @@
 
     marginsBySeller = {};
     displayNameByKey = {};
-    const nameCounts = {}; // key -> {displayName -> count} pour choisir la casse la plus fréquente
+    const nameCounts = {};
 
-    for (const sale of allSales) {
+    for (const sale of sales) {
       const raw = (sale.seller_name || "").trim();
       if (!raw) continue;
       const key = normalizeSellerKey(raw);
@@ -173,9 +191,9 @@
         const pct = Math.max(0, Math.min(100, Math.round(parseFloat(input.value)) || 0));
         btn.disabled = true;
         try {
-          await setSellerPercentage(key, pct);
+          await setSellerPercentage(key, currentDomain, pct);
           percentagesBySeller[key] = pct;
-          toast(`% de ${btn.dataset.seller} enregistré.`, "success");
+          toast(`% de ${btn.dataset.seller} (${currentDomain === "bar" ? "Bar" : "Mécano"}) enregistré.`, "success");
         } catch (err) {
           toast("Erreur : " + err.message, "error");
         }
@@ -198,17 +216,19 @@
     const salary = Math.round((margin * pct) / 100);
     if (salary <= 0) return;
 
+    const domainLabel = currentDomain === "bar" ? "Bar" : "Mécano";
     const fromLabel = currentFrom ? formatDate(currentFrom) : "le début";
     const toLabel = currentTo ? formatDate(currentTo) : "aujourd'hui";
     const confirmed = await confirmDialog(
       "Confirmer le versement",
-      `Verser ${formatUSD(salary)} à ${displayName} pour la période du ${fromLabel} au ${toLabel} ?`
+      `Verser ${formatUSD(salary)} à ${displayName} (${domainLabel}) pour la période du ${fromLabel} au ${toLabel} ? Cette somme sera enregistrée comme dépense dans le bilan ${domainLabel}.`
     );
     if (!confirmed) return;
 
     try {
       await createSalaryPayment({
         seller_name: displayName,
+        domain: currentDomain,
         period_from: currentFrom,
         period_to: currentTo,
         margin_amount: Math.round(margin),
@@ -217,7 +237,29 @@
         paid_by: profile.id,
         paid_at: new Date().toISOString(),
       });
-      toast("Salaire versé et enregistré.", "success");
+
+      // Enregistre aussi la somme comme dépense dans le bilan du service concerné
+      const periodLabel = `${fromLabel} au ${toLabel}`;
+      await createPurchase(
+        {
+          domain: currentDomain,
+          buyer_id: profile.id,
+          note: `Salaire versé à ${displayName} (période du ${periodLabel})`,
+          purchase_date: new Date().toISOString(),
+        },
+        [
+          {
+            domain: currentDomain,
+            item_id: null,
+            label: `Salaire — ${displayName}`,
+            unit_price: salary,
+            quantity: 1,
+            line_total: salary,
+          },
+        ]
+      );
+
+      toast("Salaire versé, enregistré et ajouté au bilan " + domainLabel + ".", "success");
       await refreshPayments();
     } catch (err) {
       toast("Erreur : " + err.message, "error");
@@ -225,7 +267,7 @@
   }
 
   async function refreshPayments() {
-    const payments = await listSalaryPayments();
+    const payments = await listSalaryPayments(currentDomain);
     const tbody = document.getElementById("payments-tbody");
     const empty = document.getElementById("payments-empty");
     tbody.innerHTML = "";
@@ -252,7 +294,10 @@
 
     tbody.querySelectorAll('[data-action="delete"]').forEach((btn) => {
       btn.addEventListener("click", async () => {
-        const confirmed = await confirmDialog("Supprimer ce versement", "Supprimer cette ligne de versement de salaire ? Cette action ne rembourse rien automatiquement, elle corrige juste la comptabilité.");
+        const confirmed = await confirmDialog(
+          "Supprimer ce versement",
+          "Supprimer cette ligne de versement de salaire ? Cela ne supprime pas automatiquement la ligne de dépense correspondante dans le bilan comptable — pense à la retirer aussi là-bas si besoin."
+        );
         if (!confirmed) return;
         try {
           await deleteSalaryPayment(btn.dataset.id);
