@@ -140,9 +140,11 @@ function renderNav(profile) {
   if (role === "gestionnaire" || role === "superviseur") {
     links.push({ href: "bilan-bar.html", label: "Bilan Bar" });
     links.push({ href: "bilan-mecano.html", label: "Bilan Mécano" });
+    links.push({ href: "employes.html", label: "Employés" });
   }
   if (role === "gestionnaire") {
     links.push({ href: "achats.html", label: "Achats" });
+    links.push({ href: "salaires.html", label: "Salaires" });
     links.push({ href: "admin.html", label: "Administration" });
   }
 
