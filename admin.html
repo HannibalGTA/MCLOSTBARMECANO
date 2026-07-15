@@ -182,6 +182,7 @@
     document.getElementById("image-preview-box").innerHTML = "";
     document.getElementById("cancel-edit").style.display = "none";
     document.getElementById("form-error").textContent = "";
+    document.getElementById("form-title").textContent = "Nouvel article — " + (currentDomain === "bar" ? "Bar" : "Mécano");
   }
 
   document.getElementById("cancel-edit").addEventListener("click", resetForm);
