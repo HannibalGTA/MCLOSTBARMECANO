@@ -7,14 +7,17 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Salaires — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260716a" />
+<link rel="stylesheet" href="assets/style.css?v=20260716b" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="theme-bar">
 <nav class="topbar" id="app-nav"></nav>
 
 <div class="page-wrap">
-  <h1>Salaires</h1>
+  <div class="page-title-row">
+    <img src="assets/MCbar.png" alt="" class="page-header-logo" id="page-logo" />
+    <h1>Salaires</h1>
+  </div>
   <p class="muted">Marge générée par chaque vendeur (nom saisi à la connexion), séparée Bar / Mécano. Le % se règle directement ici. Un versement s'enregistre comme une dépense dans le bilan comptable correspondant.</p>
 
   <div class="role-grid" style="grid-template-columns: 1fr 1fr; max-width:360px; margin-bottom:20px;">
@@ -62,10 +65,10 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260716a"></script>
-<script src="assets/auth.js?v=20260716a"></script>
-<script src="assets/helpers.js?v=20260716a"></script>
-<script src="assets/data.js?v=20260716a"></script>
+<script src="assets/config.js?v=20260716b"></script>
+<script src="assets/auth.js?v=20260716b"></script>
+<script src="assets/helpers.js?v=20260716b"></script>
+<script src="assets/data.js?v=20260716b"></script>
 <script>
   let profile = null;
   let currentDomain = "bar";
@@ -106,6 +109,8 @@
     const label = domain === "bar" ? "Bar" : "Mécano";
     document.getElementById("domain-label").textContent = label;
     document.getElementById("domain-label-2").textContent = label;
+    document.body.className = domain === "bar" ? "theme-bar" : "theme-mecano";
+    document.getElementById("page-logo").src = domain === "bar" ? "assets/MCbar.png" : "assets/MCmecano.png";
     await recompute();
     await refreshPayments();
   }
