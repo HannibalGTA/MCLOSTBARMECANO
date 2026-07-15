@@ -12,7 +12,7 @@
 
 <div class="page-wrap">
   <h1>Salaires</h1>
-  <p class="muted">Marge générée par chaque employé sur la période, et versement du pourcentage défini dans sa fiche (page Administration).</p>
+  <p class="muted">Marge générée par chaque vendeur (nom saisi à la connexion), tous services confondus. Le % se règle directement ici, par vendeur.</p>
 
   <div class="card">
     <div class="flex-between">
@@ -34,19 +34,19 @@
   </div>
 
   <div class="card">
-    <div class="card-title"><h2>Marge par employé sur la période</h2></div>
-    <p class="muted" style="margin-top:-6px;font-size:0.82rem;">La marge est calculée sur les ventes en caisse (bar + garage) attribuées au pseudo enregistré dans la fiche employé. Si un total a été réduit manuellement en caisse, la marge par ligne n'en tient pas compte (légère surestimation possible).</p>
+    <div class="card-title"><h2>Marge par vendeur sur la période</h2></div>
+    <p class="muted" style="margin-top:-6px;font-size:0.82rem;">Calculée sur les ventes en caisse (bar + garage). Si un total a été réduit manuellement en caisse, la marge par ligne n'en tient pas compte (légère surestimation possible). Change le % puis clique "Enregistrer le %" pour le sauvegarder.</p>
     <table>
-      <thead><tr><th>Employé</th><th>Service</th><th class="num">Marge générée</th><th class="num">%</th><th class="num">Salaire à verser</th><th></th></tr></thead>
+      <thead><tr><th>Vendeur</th><th class="num">Marge générée</th><th class="num">%</th><th></th><th class="num">Salaire à verser</th><th></th></tr></thead>
       <tbody id="margins-tbody"></tbody>
     </table>
-    <div class="empty-state" id="margins-empty" style="display:none;">Aucun employé actif.</div>
+    <div class="empty-state" id="margins-empty" style="display:none;">Aucune vente avec un nom de vendeur sur cette période.</div>
   </div>
 
   <div class="card">
     <div class="card-title"><h2>Historique des versements</h2></div>
     <table>
-      <thead><tr><th>Date</th><th>Employé</th><th>Période</th><th class="num">Marge</th><th class="num">%</th><th class="num">Montant versé</th><th></th></tr></thead>
+      <thead><tr><th>Date</th><th>Vendeur</th><th>Période</th><th class="num">Marge</th><th class="num">%</th><th class="num">Montant versé</th><th></th></tr></thead>
       <tbody id="payments-tbody"></tbody>
     </table>
     <div class="empty-state" id="payments-empty" style="display:none;">Aucun versement enregistré.</div>
@@ -60,15 +60,19 @@
 <script src="assets/data.js"></script>
 <script>
   let profile = null;
-  let employees = [];
   let currentFrom = null;
   let currentTo = null;
-  let marginsByEmployee = {}; // employee.id -> margin
+  let marginsBySeller = {}; // normalizedKey -> margin
+  let percentagesBySeller = {}; // normalizedKey -> percentage
+  let displayNameByKey = {}; // normalizedKey -> nom tel qu'il apparaît le plus souvent
+
+  function normalizeSellerKey(name) {
+    return (name || "").trim().toLowerCase();
+  }
 
   async function init() {
     profile = await requireRole(["gestionnaire"]);
     if (!profile) return;
-    employees = await listEmployees({ onlyActive: true });
     await recompute();
     await refreshPayments();
   }
@@ -86,27 +90,40 @@
     currentFrom = fromInput ? new Date(fromInput + "T00:00:00").toISOString() : null;
     currentTo = toInput ? new Date(toInput + "T23:59:59").toISOString() : null;
 
-    const [barSales, mecanoSales] = await Promise.all([
+    const [barSales, mecanoSales, percentageRows] = await Promise.all([
       listSales("bar", { from: currentFrom, to: currentTo }),
       listSales("mecano", { from: currentFrom, to: currentTo }),
+      listSellerPercentages(),
     ]);
     const allSales = [...barSales, ...mecanoSales];
 
-    const marginByNickname = {};
+    percentagesBySeller = {};
+    for (const row of percentageRows) {
+      percentagesBySeller[normalizeSellerKey(row.seller_name)] = row.percentage;
+    }
+
+    marginsBySeller = {};
+    displayNameByKey = {};
+    const nameCounts = {}; // key -> {displayName -> count} pour choisir la casse la plus fréquente
+
     for (const sale of allSales) {
-      const key = (sale.seller_name || "").trim().toLowerCase();
-      if (!key) continue;
+      const raw = (sale.seller_name || "").trim();
+      if (!raw) continue;
+      const key = normalizeSellerKey(raw);
+
       let margin = 0;
       for (const line of sale.lines || []) {
         margin += (Number(line.unit_price) - Number(line.buy_price || 0)) * Number(line.quantity);
       }
-      marginByNickname[key] = (marginByNickname[key] || 0) + margin;
+      marginsBySeller[key] = (marginsBySeller[key] || 0) + margin;
+
+      nameCounts[key] = nameCounts[key] || {};
+      nameCounts[key][raw] = (nameCounts[key][raw] || 0) + 1;
     }
 
-    marginsByEmployee = {};
-    for (const emp of employees) {
-      const key = (emp.staff_nickname || "").trim().toLowerCase();
-      marginsByEmployee[emp.id] = marginByNickname[key] || 0;
+    for (const key in nameCounts) {
+      const variants = nameCounts[key];
+      displayNameByKey[key] = Object.keys(variants).sort((a, b) => variants[b] - variants[a])[0];
     }
 
     renderMargins();
@@ -115,53 +132,87 @@
   function renderMargins() {
     const tbody = document.getElementById("margins-tbody");
     const empty = document.getElementById("margins-empty");
+    const keys = Object.keys(marginsBySeller).sort((a, b) => displayNameByKey[a].localeCompare(displayNameByKey[b]));
     tbody.innerHTML = "";
-    empty.style.display = employees.length ? "none" : "block";
+    empty.style.display = keys.length ? "none" : "block";
 
-    for (const emp of employees) {
-      const service = emp.works_bar && emp.works_mecano ? "Bar + Garage" : emp.works_bar ? "Bar" : emp.works_mecano ? "Garage" : "—";
-      const margin = marginsByEmployee[emp.id] || 0;
-      const salary = Math.round((margin * emp.salary_percentage) / 100);
+    for (const key of keys) {
+      const seller = displayNameByKey[key];
+      const margin = marginsBySeller[key] || 0;
+      const pct = percentagesBySeller[key] !== undefined ? percentagesBySeller[key] : 10;
+      const salary = Math.round((margin * pct) / 100);
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${escapeHtml(emp.first_name)} ${escapeHtml(emp.last_name)}</td>
-        <td>${service}</td>
+        <td>${escapeHtml(seller)}</td>
         <td class="num">${formatUSD(margin)}</td>
-        <td class="num">${emp.salary_percentage}%</td>
-        <td class="num">${formatUSD(salary)}</td>
-        <td><button class="btn-primary btn-sm" data-action="pay" data-id="${emp.id}" ${salary <= 0 ? "disabled" : ""}>Verser le salaire</button></td>
+        <td class="num"><input type="number" min="0" max="100" step="1" inputmode="numeric" value="${pct}" data-pct-input="${escapeHtml(key)}" style="width:80px;margin-bottom:0;text-align:right;" /></td>
+        <td><button class="btn-ghost btn-sm" data-action="save-pct" data-key="${escapeHtml(key)}" data-seller="${escapeHtml(seller)}">Enregistrer le %</button></td>
+        <td class="num" data-salary-cell="${escapeHtml(key)}">${formatUSD(salary)}</td>
+        <td><button class="btn-primary btn-sm" data-action="pay" data-key="${escapeHtml(key)}" data-seller="${escapeHtml(seller)}" ${salary <= 0 ? "disabled" : ""}>Verser le salaire</button></td>
       `;
       tbody.appendChild(tr);
     }
 
+    tbody.querySelectorAll('[data-pct-input]').forEach((input) => {
+      input.addEventListener("input", () => {
+        const key = input.dataset.pctInput;
+        const pct = Math.max(0, Math.min(100, Math.round(parseFloat(input.value)) || 0));
+        const margin = marginsBySeller[key] || 0;
+        const salary = Math.round((margin * pct) / 100);
+        const cell = tbody.querySelector(`[data-salary-cell="${cssEscape(key)}"]`);
+        if (cell) cell.textContent = formatUSD(salary);
+        const payBtn = tbody.querySelector(`[data-action="pay"][data-key="${cssEscape(key)}"]`);
+        if (payBtn) payBtn.disabled = salary <= 0;
+      });
+    });
+
+    tbody.querySelectorAll('[data-action="save-pct"]').forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const key = btn.dataset.key;
+        const input = tbody.querySelector(`[data-pct-input="${cssEscape(key)}"]`);
+        const pct = Math.max(0, Math.min(100, Math.round(parseFloat(input.value)) || 0));
+        btn.disabled = true;
+        try {
+          await setSellerPercentage(key, pct);
+          percentagesBySeller[key] = pct;
+          toast(`% de ${btn.dataset.seller} enregistré.`, "success");
+        } catch (err) {
+          toast("Erreur : " + err.message, "error");
+        }
+        btn.disabled = false;
+      });
+    });
+
     tbody.querySelectorAll('[data-action="pay"]').forEach((btn) => {
-      btn.addEventListener("click", () => paySalary(btn.dataset.id));
+      btn.addEventListener("click", () => paySalary(btn.dataset.key, btn.dataset.seller));
     });
   }
 
-  async function paySalary(employeeId) {
-    const emp = employees.find((e) => e.id === employeeId);
-    if (!emp) return;
-    const margin = marginsByEmployee[emp.id] || 0;
-    const salary = Math.round((margin * emp.salary_percentage) / 100);
+  function cssEscape(str) {
+    return str.replace(/(["\\])/g, "\\$1");
+  }
+
+  async function paySalary(key, displayName) {
+    const margin = marginsBySeller[key] || 0;
+    const pct = percentagesBySeller[key] !== undefined ? percentagesBySeller[key] : 10;
+    const salary = Math.round((margin * pct) / 100);
     if (salary <= 0) return;
 
     const fromLabel = currentFrom ? formatDate(currentFrom) : "le début";
     const toLabel = currentTo ? formatDate(currentTo) : "aujourd'hui";
     const confirmed = await confirmDialog(
       "Confirmer le versement",
-      `Verser ${formatUSD(salary)} à ${emp.first_name} ${emp.last_name} pour la période du ${fromLabel} au ${toLabel} ?`
+      `Verser ${formatUSD(salary)} à ${displayName} pour la période du ${fromLabel} au ${toLabel} ?`
     );
     if (!confirmed) return;
 
     try {
       await createSalaryPayment({
-        employee_id: emp.id,
-        employee_name: `${emp.first_name} ${emp.last_name}`,
+        seller_name: displayName,
         period_from: currentFrom,
         period_to: currentTo,
         margin_amount: Math.round(margin),
-        percentage: emp.salary_percentage,
+        percentage: pct,
         amount: salary,
         paid_by: profile.id,
         paid_at: new Date().toISOString(),
@@ -189,7 +240,7 @@
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${formatDateTime(p.paid_at)}</td>
-        <td>${escapeHtml(p.employee_name)}</td>
+        <td>${escapeHtml(p.seller_name || p.employee_name || "—")}</td>
         <td>${period}</td>
         <td class="num">${formatUSD(p.margin_amount)}</td>
         <td class="num">${p.percentage}%</td>
