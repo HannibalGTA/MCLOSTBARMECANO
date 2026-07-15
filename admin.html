@@ -94,10 +94,11 @@
   let currentDomain = "bar";
   let currentImageDataUrl = null;
   let editingId = null;
+  let currentProfile = null;
 
   async function init() {
-    const profile = await requireRole(["gestionnaire"]);
-    if (!profile) return;
+    currentProfile = await requireRole(["gestionnaire"]);
+    if (!currentProfile) return;
     await refreshTable();
     renderPasswordRows();
   }
@@ -139,6 +140,15 @@
         if (result.ok) {
           toast(`Mot de passe ${ROLE_LABELS[role]} mis à jour.`, "success");
           input.value = "";
+          // Si le gestionnaire vient de changer SON PROPRE mot de passe, sa session
+          // en cours est invalidée par Supabase : on se reconnecte aussitôt avec le
+          // nouveau mot de passe pour ne pas casser la suite des actions.
+          if (role === currentProfile.role) {
+            const relogin = await loginAs(role, newPassword);
+            if (!relogin.ok) {
+              toast("Mot de passe changé, mais reconnexion automatique impossible : reconnecte-toi manuellement.", "error");
+            }
+          }
         } else {
           toast("Erreur : " + result.error, "error");
         }
