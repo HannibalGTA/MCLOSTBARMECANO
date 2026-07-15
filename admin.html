@@ -84,6 +84,75 @@
       </div>
     </div>
   </div>
+
+  <div class="card">
+    <div class="card-title"><h2 id="employee-form-title">Nouvel employé</h2></div>
+    <form id="employee-form">
+      <input type="hidden" id="emp-id" />
+      <div class="grid-3">
+        <div>
+          <label for="emp-first-name">Prénom</label>
+          <input type="text" id="emp-first-name" placeholder="Ex : John" required />
+        </div>
+        <div>
+          <label for="emp-last-name">Nom</label>
+          <input type="text" id="emp-last-name" placeholder="Ex : Doe" required />
+        </div>
+        <div>
+          <label for="emp-number">Identifiant (n°)</label>
+          <input type="text" id="emp-number" placeholder="Ex : 042" required />
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div>
+          <label for="emp-nickname">Pseudo en jeu (tel que tapé à la connexion)</label>
+          <input type="text" id="emp-nickname" placeholder="Ex : Jhon Doe" required />
+        </div>
+        <div>
+          <label for="emp-role">Rôle / poste</label>
+          <input type="text" id="emp-role" placeholder="Ex : Barman senior" />
+        </div>
+        <div>
+          <label for="emp-percentage">% de marge reversé</label>
+          <input type="number" id="emp-percentage" min="0" max="100" step="1" inputmode="numeric" value="10" />
+        </div>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:0.85rem;margin-bottom:6px;">
+        <input type="checkbox" id="emp-works-bar" style="width:auto;margin:0;" /> Travaille au Bar
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:0.85rem;margin-bottom:14px;">
+        <input type="checkbox" id="emp-works-mecano" style="width:auto;margin:0;" /> Travaille au Garage
+      </label>
+
+      <label for="emp-contract-start">Date de début du contrat</label>
+      <input type="date" id="emp-contract-start" />
+
+      <label for="emp-contract-file">Contrat (fichier, 100 Ko max)</label>
+      <input type="file" id="emp-contract-file" />
+      <div id="emp-contract-current" class="muted" style="font-size:0.85rem;margin-bottom:14px;"></div>
+
+      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:0.85rem;">
+        <input type="checkbox" id="emp-active" style="width:auto;margin:0;" checked /> Employé actif
+      </label>
+
+      <div class="flex-between" style="margin-top:10px;">
+        <button type="button" class="btn-ghost" id="emp-cancel-edit" style="display:none;">Annuler la modification</button>
+        <button type="submit" class="btn-primary">Enregistrer</button>
+      </div>
+      <div class="login-error" id="employee-form-error"></div>
+    </form>
+
+    <div class="card-title" style="margin-top:24px;"><h2>Liste des employés</h2></div>
+    <table>
+      <thead>
+        <tr><th>Nom</th><th>Prénom</th><th>N°</th><th>Service</th><th>Rôle</th><th>Début contrat</th><th>Contrat</th><th></th></tr>
+      </thead>
+      <tbody id="employees-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="employees-empty" style="display:none;">Aucun employé pour le moment.</div>
+  </div>
 </div>
 
 <script src="assets/config.js"></script>
@@ -101,6 +170,7 @@
     if (!currentProfile) return;
     await refreshTable();
     renderPasswordRows();
+    await refreshEmployees();
   }
 
   function renderPasswordRows() {
@@ -314,6 +384,146 @@
       await deleteItem(currentDomain, id);
       toast("Article supprimé.", "success");
       await refreshTable();
+    } catch (err) {
+      toast("Erreur : " + err.message, "error");
+    }
+  }
+
+  // ---------- EMPLOYÉS ----------
+  let employeeEditingId = null;
+  let employeeContractData = null; // {dataUrl, name, type} en attente d'enregistrement
+
+  function resetEmployeeForm() {
+    employeeEditingId = null;
+    employeeContractData = null;
+    document.getElementById("employee-form").reset();
+    document.getElementById("emp-id").value = "";
+    document.getElementById("emp-percentage").value = "10";
+    document.getElementById("emp-active").checked = true;
+    document.getElementById("emp-contract-current").textContent = "";
+    document.getElementById("emp-cancel-edit").style.display = "none";
+    document.getElementById("employee-form-error").textContent = "";
+    document.getElementById("employee-form-title").textContent = "Nouvel employé";
+  }
+
+  document.getElementById("emp-cancel-edit").addEventListener("click", resetEmployeeForm);
+
+  document.getElementById("emp-contract-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      employeeContractData = await readFileAsDataUrl(file, MAX_CONTRACT_BYTES);
+      document.getElementById("emp-contract-current").textContent = "Nouveau fichier prêt : " + file.name;
+    } catch (err) {
+      toast(err.message, "error");
+      e.target.value = "";
+    }
+  });
+
+  document.getElementById("employee-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById("employee-form-error");
+    errorEl.textContent = "";
+
+    const worksBar = document.getElementById("emp-works-bar").checked;
+    const worksMecano = document.getElementById("emp-works-mecano").checked;
+    if (!worksBar && !worksMecano) {
+      errorEl.textContent = "Sélectionne au moins Bar ou Garage (ou les deux).";
+      return;
+    }
+
+    const payload = {
+      first_name: document.getElementById("emp-first-name").value.trim(),
+      last_name: document.getElementById("emp-last-name").value.trim(),
+      employee_number: document.getElementById("emp-number").value.trim(),
+      staff_nickname: document.getElementById("emp-nickname").value.trim(),
+      job_role: document.getElementById("emp-role").value.trim() || null,
+      salary_percentage: Math.round(parseFloat(document.getElementById("emp-percentage").value)) || 0,
+      works_bar: worksBar,
+      works_mecano: worksMecano,
+      contract_start_date: document.getElementById("emp-contract-start").value || null,
+      active: document.getElementById("emp-active").checked,
+    };
+    if (employeeEditingId) payload.id = employeeEditingId;
+    if (employeeContractData) {
+      payload.contract_file_data = employeeContractData.dataUrl;
+      payload.contract_file_name = employeeContractData.name;
+      payload.contract_file_type = employeeContractData.type;
+    }
+
+    try {
+      await upsertEmployee(payload);
+      toast(employeeEditingId ? "Employé mis à jour." : "Employé créé.", "success");
+      resetEmployeeForm();
+      await refreshEmployees();
+    } catch (err) {
+      errorEl.textContent = "Erreur : " + err.message + (err.message.includes("duplicate") ? " (identifiant déjà utilisé ?)" : "");
+    }
+  });
+
+  async function refreshEmployees() {
+    const employees = await listEmployees();
+    const tbody = document.getElementById("employees-tbody");
+    const empty = document.getElementById("employees-empty");
+    tbody.innerHTML = "";
+    empty.style.display = employees.length ? "none" : "block";
+
+    for (const emp of employees) {
+      const service = emp.works_bar && emp.works_mecano ? "Bar + Garage" : emp.works_bar ? "Bar" : emp.works_mecano ? "Garage" : "—";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(emp.last_name)} ${!emp.active ? '<span class="badge muted" style="border:1px solid #444;">inactif</span>' : ""}</td>
+        <td>${escapeHtml(emp.first_name)}</td>
+        <td class="mono">${escapeHtml(emp.employee_number)}</td>
+        <td>${service}</td>
+        <td>${escapeHtml(emp.job_role || "—")}</td>
+        <td>${emp.contract_start_date ? formatDate(emp.contract_start_date) : "—"}</td>
+        <td>${emp.contract_file_data ? `<a href="${emp.contract_file_data}" download="${escapeHtml(emp.contract_file_name || "contrat")}" class="btn-ghost btn-sm" style="text-decoration:none;display:inline-block;">Télécharger</a>` : '<span class="muted">—</span>'}</td>
+        <td>
+          <button class="btn-ghost btn-sm" data-action="edit-emp" data-id="${emp.id}">Modifier</button>
+          <button class="btn-danger btn-sm" data-action="delete-emp" data-id="${emp.id}">Supprimer</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    tbody.querySelectorAll('[data-action="edit-emp"]').forEach((btn) => {
+      btn.addEventListener("click", () => editEmployee(btn.dataset.id, employees));
+    });
+    tbody.querySelectorAll('[data-action="delete-emp"]').forEach((btn) => {
+      btn.addEventListener("click", () => removeEmployee(btn.dataset.id));
+    });
+  }
+
+  function editEmployee(id, employees) {
+    const emp = employees.find((e) => e.id === id);
+    if (!emp) return;
+    employeeEditingId = id;
+    employeeContractData = null;
+    document.getElementById("employee-form-title").textContent = "Modifier — " + emp.first_name + " " + emp.last_name;
+    document.getElementById("emp-id").value = id;
+    document.getElementById("emp-first-name").value = emp.first_name;
+    document.getElementById("emp-last-name").value = emp.last_name;
+    document.getElementById("emp-number").value = emp.employee_number;
+    document.getElementById("emp-nickname").value = emp.staff_nickname;
+    document.getElementById("emp-role").value = emp.job_role || "";
+    document.getElementById("emp-percentage").value = emp.salary_percentage;
+    document.getElementById("emp-works-bar").checked = emp.works_bar;
+    document.getElementById("emp-works-mecano").checked = emp.works_mecano;
+    document.getElementById("emp-contract-start").value = emp.contract_start_date || "";
+    document.getElementById("emp-active").checked = emp.active;
+    document.getElementById("emp-contract-current").textContent = emp.contract_file_name ? "Fichier actuel : " + emp.contract_file_name : "Aucun contrat enregistré.";
+    document.getElementById("emp-cancel-edit").style.display = "inline-block";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function removeEmployee(id) {
+    const confirmed = await confirmDialog("Supprimer l'employé", "Supprimer définitivement cet employé et son contrat associé ?");
+    if (!confirmed) return;
+    try {
+      await deleteEmployee(id);
+      toast("Employé supprimé (contrat effacé avec).", "success");
+      await refreshEmployees();
     } catch (err) {
       toast("Erreur : " + err.message, "error");
     }
