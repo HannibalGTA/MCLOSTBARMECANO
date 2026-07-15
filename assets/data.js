@@ -41,8 +41,9 @@ async function deleteItem(domain, id) {
  * header: {seller_id, seller_name, note, sale_date, ...extra fields for mecano}
  * lines: [{item_id, item_name, unit_price, quantity, line_total}]
  */
-async function createSale(domain, header, lines) {
-  const total = lines.reduce((s, l) => s + l.line_total, 0);
+async function createSale(domain, header, lines, overrideTotal = null) {
+  const computedTotal = lines.reduce((s, l) => s + l.line_total, 0);
+  const total = overrideTotal !== null && overrideTotal !== undefined ? Math.round(overrideTotal) : Math.round(computedTotal);
   const { data: sale, error } = await supabaseClient
     .from(salesTable(domain))
     .insert({ ...header, total })
@@ -84,8 +85,9 @@ async function updateSale(domain, id, patch) {
  * header: {domain, buyer_id, note, purchase_date}
  * lines: [{domain, item_id, label, unit_price, quantity, line_total}]
  */
-async function createPurchase(header, lines) {
-  const total = lines.reduce((s, l) => s + l.line_total, 0);
+async function createPurchase(header, lines, overrideTotal = null) {
+  const computedTotal = lines.reduce((s, l) => s + l.line_total, 0);
+  const total = overrideTotal !== null && overrideTotal !== undefined ? Math.round(overrideTotal) : Math.round(computedTotal);
   const { data: purchase, error } = await supabaseClient
     .from("purchases")
     .insert({ ...header, total })
