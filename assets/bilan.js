@@ -1,11 +1,14 @@
 // =========================================================
 // BILAN — logique partagée entre bilan-bar.html et bilan-mecano.html
+// Le superviseur est lecteur seul : aucun bouton modifier/supprimer.
+// Le gestionnaire peut modifier ou supprimer une vente/dépense ou une ligne.
 // =========================================================
 
 async function initBilan(domain) {
   const profile = await requireRole(["gestionnaire", "superviseur"]);
   if (!profile) return;
 
+  const isManager = profile.role === "gestionnaire";
   const state = { from: null, to: null };
 
   const fromInput = document.getElementById("filter-from");
@@ -82,6 +85,9 @@ async function initBilan(domain) {
     document.getElementById("stat-stock-value").textContent = formatUSD(stockValue);
   }
 
+  // ---------------------------------------------------------
+  // VENTES
+  // ---------------------------------------------------------
   async function refreshSales() {
     const sales = await listSales(domain, { from: state.from, to: state.to });
     const tbody = document.getElementById("sales-tbody");
@@ -106,7 +112,7 @@ async function initBilan(domain) {
         <td class="num">${formatUSD(sale.total)}</td>
         <td>
           <button class="btn-ghost btn-sm" data-action="view" data-id="${sale.id}">Détail</button>
-          <button class="btn-danger btn-sm" data-action="delete" data-id="${sale.id}">Supprimer</button>
+          ${isManager ? `<button class="btn-danger btn-sm" data-action="delete" data-id="${sale.id}">Supprimer</button>` : ""}
         </td>
       `;
       tbody.appendChild(tr);
@@ -117,7 +123,8 @@ async function initBilan(domain) {
     });
     tbody.querySelectorAll('[data-action="delete"]').forEach((btn) => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Supprimer cette vente ? Le stock des articles sera recrédité.")) return;
+        const confirmed = await confirmDialog("Supprimer la vente", "Supprimer cette vente ? Le stock des articles sera recrédité.");
+        if (!confirmed) return;
         try {
           await deleteSale(domain, btn.dataset.id);
           toast("Vente supprimée.", "success");
@@ -131,7 +138,11 @@ async function initBilan(domain) {
 
   function openSaleModal(sale) {
     if (!sale) return;
-    const backdrop = document.getElementById("sale-modal");
+    renderSaleView(sale);
+    document.getElementById("sale-modal").style.display = "flex";
+  }
+
+  function renderSaleView(sale) {
     const body = document.getElementById("sale-modal-body");
     const extraInfo =
       domain === "mecano"
@@ -141,15 +152,17 @@ async function initBilan(domain) {
       domain === "mecano" && typeof showInvoiceModal === "function"
         ? `<button class="btn-secondary btn-sm" id="reopen-invoice-btn" type="button">Revoir la facture</button>`
         : "";
+    const editButton = isManager ? `<button class="btn-ghost btn-sm" id="edit-sale-btn" type="button">Modifier</button>` : "";
+
     body.innerHTML = `
       <div class="flex-between">
         <h3 class="mt-0">Vente du ${formatDateTime(sale.sale_date)}</h3>
-        ${invoiceButton}
+        <div style="display:flex;gap:8px;">${invoiceButton}${editButton}</div>
       </div>
       ${extraInfo}
       ${sale.note ? `<p class="muted">Note : ${escapeHtml(sale.note)}</p>` : ""}
       <table>
-        <thead><tr><th>Article</th><th class="num">Qté</th><th class="num">P.U.</th><th class="num">Total</th><th></th></tr></thead>
+        <thead><tr><th>Article</th><th class="num">Qté</th><th class="num">P.U.</th><th class="num">Total</th>${isManager ? "<th></th>" : ""}</tr></thead>
         <tbody>
           ${sale.lines
             .map(
@@ -159,7 +172,7 @@ async function initBilan(domain) {
               <td class="num">${l.quantity}</td>
               <td class="num">${formatUSD(l.unit_price)}</td>
               <td class="num">${formatUSD(l.line_total)}</td>
-              <td><button class="btn-danger btn-sm" data-line-id="${l.id}">Suppr.</button></td>
+              ${isManager ? `<td><button class="btn-danger btn-sm" data-line-id="${l.id}">Suppr.</button></td>` : ""}
             </tr>`
             )
             .join("")}
@@ -167,6 +180,7 @@ async function initBilan(domain) {
       </table>
       <div class="ticket-total"><span>Total</span><span>${formatUSD(sale.total)}</span></div>
     `;
+
     const reopenBtn = document.getElementById("reopen-invoice-btn");
     if (reopenBtn) {
       reopenBtn.addEventListener("click", () => {
@@ -182,9 +196,16 @@ async function initBilan(domain) {
         });
       });
     }
+
+    const editBtn = document.getElementById("edit-sale-btn");
+    if (editBtn) {
+      editBtn.addEventListener("click", () => renderSaleEdit(sale));
+    }
+
     body.querySelectorAll("[data-line-id]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Supprimer cette ligne ? Le stock sera recrédité et le total recalculé.")) return;
+        const confirmed = await confirmDialog("Supprimer la ligne", "Supprimer cette ligne ? Le stock sera recrédité et le total recalculé.");
+        if (!confirmed) return;
         try {
           await deleteSaleLineAndRecalc(domain, sale, btn.dataset.lineId);
           toast("Ligne supprimée.", "success");
@@ -195,7 +216,114 @@ async function initBilan(domain) {
         }
       });
     });
-    backdrop.style.display = "flex";
+  }
+
+  function renderSaleEdit(sale) {
+    const body = document.getElementById("sale-modal-body");
+    const extraFields =
+      domain === "mecano"
+        ? `
+        <div class="grid-3">
+          <div><label>Client</label><input type="text" id="edit-client" value="${escapeHtml(sale.client_name || "")}" /></div>
+          <div><label>Véhicule</label><input type="text" id="edit-vehicle" value="${escapeHtml(sale.vehicle_model || "")}" /></div>
+          <div><label>Plaque</label><input type="text" id="edit-plate" value="${escapeHtml(sale.plate || "")}" /></div>
+        </div>`
+        : "";
+
+    body.innerHTML = `
+      <h3 class="mt-0">Modifier la vente du ${formatDateTime(sale.sale_date)}</h3>
+      <label>Vendeur</label>
+      <input type="text" id="edit-seller" value="${escapeHtml(sale.seller_name || "")}" />
+      ${extraFields}
+      <label>Note</label>
+      <textarea id="edit-note" rows="2">${escapeHtml(sale.note || "")}</textarea>
+
+      <table>
+        <thead><tr><th>Article</th><th class="num">Qté</th><th class="num">P.U. ($)</th><th></th></tr></thead>
+        <tbody id="edit-lines-tbody">
+          ${sale.lines
+            .map(
+              (l) => `
+            <tr data-line-id="${l.id}">
+              <td><input type="text" class="edit-line-name" value="${escapeHtml(l.item_name)}" style="margin-bottom:0;" /></td>
+              <td class="num"><input type="number" class="edit-line-qty" min="1" step="1" value="${l.quantity}" style="width:70px;margin-bottom:0;text-align:right;" /></td>
+              <td class="num"><input type="number" class="edit-line-price" min="0" step="1" value="${l.unit_price}" style="width:90px;margin-bottom:0;text-align:right;" /></td>
+              <td><button type="button" class="btn-danger btn-sm" data-remove-line="${l.id}">✕</button></td>
+            </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
+
+      <div class="flex-between" style="margin-top:14px;">
+        <button type="button" class="btn-ghost" id="cancel-edit-sale">Annuler</button>
+        <button type="button" class="btn-primary" id="save-edit-sale">Enregistrer les modifications</button>
+      </div>
+      <div class="login-error" id="edit-sale-error"></div>
+    `;
+
+    const removedLineIds = [];
+    body.querySelectorAll("[data-remove-line]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        removedLineIds.push(btn.dataset.removeLine);
+        btn.closest("tr").remove();
+      });
+    });
+
+    document.getElementById("cancel-edit-sale").addEventListener("click", () => renderSaleView(sale));
+
+    document.getElementById("save-edit-sale").addEventListener("click", async () => {
+      const errorEl = document.getElementById("edit-sale-error");
+      errorEl.textContent = "";
+      const saveBtn = document.getElementById("save-edit-sale");
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Enregistrement...";
+
+      try {
+        // Supprime les lignes retirées (le stock est recrédité automatiquement)
+        for (const lineId of removedLineIds) {
+          await supabaseClient.from(saleLinesTableName()).delete().eq("id", lineId);
+        }
+
+        // Met à jour chaque ligne restante
+        let newTotal = 0;
+        const rows = body.querySelectorAll("#edit-lines-tbody tr[data-line-id]");
+        for (const row of rows) {
+          const lineId = row.dataset.lineId;
+          const name = row.querySelector(".edit-line-name").value.trim();
+          const qty = Math.round(parseFloat(row.querySelector(".edit-line-qty").value)) || 0;
+          const price = Math.round(parseFloat(row.querySelector(".edit-line-price").value)) || 0;
+          const lineTotal = qty * price;
+          newTotal += lineTotal;
+          await updateSaleLine(domain, lineId, { item_name: name, quantity: qty, unit_price: price, line_total: lineTotal });
+        }
+
+        // Met à jour l'en-tête de la vente (vendeur, note, et infos véhicule pour le mécano)
+        const headerPatch = {
+          seller_name: document.getElementById("edit-seller").value.trim(),
+          note: document.getElementById("edit-note").value.trim() || null,
+          total: newTotal,
+        };
+        if (domain === "mecano") {
+          headerPatch.client_name = document.getElementById("edit-client").value.trim() || null;
+          headerPatch.vehicle_model = document.getElementById("edit-vehicle").value.trim() || null;
+          headerPatch.plate = document.getElementById("edit-plate").value.trim() || null;
+        }
+        await updateSale(domain, sale.id, headerPatch);
+
+        toast("Vente modifiée.", "success");
+        closeSaleModal();
+        refreshAll();
+      } catch (err) {
+        errorEl.textContent = "Erreur : " + err.message;
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Enregistrer les modifications";
+      }
+    });
+  }
+
+  function saleLinesTableName() {
+    return domain === "bar" ? "bar_sale_lines" : "mecano_sale_lines";
   }
 
   function closeSaleModal() {
@@ -203,6 +331,17 @@ async function initBilan(domain) {
   }
   document.getElementById("close-sale-modal").addEventListener("click", closeSaleModal);
 
+  async function deleteSaleLineAndRecalc(domain, sale, lineId) {
+    const table = domain === "bar" ? "bar_sale_lines" : "mecano_sale_lines";
+    const { error: delError } = await supabaseClient.from(table).delete().eq("id", lineId);
+    if (delError) throw delError;
+    const remainingTotal = sale.lines.filter((l) => l.id !== lineId).reduce((s, l) => s + Number(l.line_total), 0);
+    await updateSale(domain, sale.id, { total: remainingTotal });
+  }
+
+  // ---------------------------------------------------------
+  // DÉPENSES / ACHATS
+  // ---------------------------------------------------------
   async function refreshPurchases() {
     const purchases = await listPurchases({ domain, from: state.from, to: state.to });
     const tbody = document.getElementById("purchases-tbody");
@@ -225,7 +364,7 @@ async function initBilan(domain) {
         <td class="num">${formatUSD(p.total)}</td>
         <td>
           <button class="btn-ghost btn-sm" data-action="view" data-id="${p.id}">Détail</button>
-          <button class="btn-danger btn-sm" data-action="delete" data-id="${p.id}">Supprimer</button>
+          ${isManager ? `<button class="btn-danger btn-sm" data-action="delete" data-id="${p.id}">Supprimer</button>` : ""}
         </td>
       `;
       tbody.appendChild(tr);
@@ -235,7 +374,8 @@ async function initBilan(domain) {
     });
     tbody.querySelectorAll('[data-action="delete"]').forEach((btn) => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Supprimer cet achat ? Le stock sera ajusté en conséquence.")) return;
+        const confirmed = await confirmDialog("Supprimer l'achat", "Supprimer cet achat ? Le stock sera ajusté en conséquence.");
+        if (!confirmed) return;
         try {
           await deletePurchase(btn.dataset.id);
           toast("Achat supprimé.", "success");
@@ -249,10 +389,18 @@ async function initBilan(domain) {
 
   function openPurchaseModal(p) {
     if (!p) return;
-    const backdrop = document.getElementById("sale-modal");
+    renderPurchaseView(p);
+    document.getElementById("sale-modal").style.display = "flex";
+  }
+
+  function renderPurchaseView(p) {
     const body = document.getElementById("sale-modal-body");
+    const editButton = isManager ? `<button class="btn-ghost btn-sm" id="edit-purchase-btn" type="button">Modifier</button>` : "";
     body.innerHTML = `
-      <h3 class="mt-0">Achat du ${formatDateTime(p.purchase_date)}</h3>
+      <div class="flex-between">
+        <h3 class="mt-0">Achat du ${formatDateTime(p.purchase_date)}</h3>
+        ${editButton}
+      </div>
       ${p.note ? `<p class="muted">Note : ${escapeHtml(p.note)}</p>` : ""}
       <table>
         <thead><tr><th>Libellé</th><th class="num">Qté</th><th class="num">P.U.</th><th class="num">Total</th></tr></thead>
@@ -262,17 +410,89 @@ async function initBilan(domain) {
       </table>
       <div class="ticket-total"><span>Total</span><span>${formatUSD(p.total)}</span></div>
     `;
-    backdrop.style.display = "flex";
+    const editBtn = document.getElementById("edit-purchase-btn");
+    if (editBtn) editBtn.addEventListener("click", () => renderPurchaseEdit(p));
   }
 
-  async function deleteSaleLineAndRecalc(domain, sale, lineId) {
-    const table = domain === "bar" ? "bar_sale_lines" : "mecano_sale_lines";
-    const salesTableName = domain === "bar" ? "bar_sales" : "mecano_sales";
-    const { error: delError } = await supabaseClient.from(table).delete().eq("id", lineId);
-    if (delError) throw delError;
-    const remainingTotal = sale.lines.filter((l) => l.id !== lineId).reduce((s, l) => s + Number(l.line_total), 0);
-    const { error: updError } = await supabaseClient.from(salesTableName).update({ total: remainingTotal }).eq("id", sale.id);
-    if (updError) throw updError;
+  function renderPurchaseEdit(p) {
+    const body = document.getElementById("sale-modal-body");
+    body.innerHTML = `
+      <h3 class="mt-0">Modifier l'achat du ${formatDateTime(p.purchase_date)}</h3>
+      <label>Note</label>
+      <textarea id="edit-purchase-note" rows="2">${escapeHtml(p.note || "")}</textarea>
+
+      <table>
+        <thead><tr><th>Libellé</th><th class="num">Qté</th><th class="num">P.U. ($)</th><th></th></tr></thead>
+        <tbody id="edit-purchase-lines-tbody">
+          ${p.lines
+            .map(
+              (l) => `
+            <tr data-line-id="${l.id}">
+              <td><input type="text" class="edit-line-label" value="${escapeHtml(l.label)}" style="margin-bottom:0;" /></td>
+              <td class="num"><input type="number" class="edit-line-qty" min="1" step="1" value="${l.quantity}" style="width:70px;margin-bottom:0;text-align:right;" /></td>
+              <td class="num"><input type="number" class="edit-line-price" min="0" step="1" value="${l.unit_price}" style="width:90px;margin-bottom:0;text-align:right;" /></td>
+              <td><button type="button" class="btn-danger btn-sm" data-remove-line="${l.id}">✕</button></td>
+            </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
+
+      <div class="flex-between" style="margin-top:14px;">
+        <button type="button" class="btn-ghost" id="cancel-edit-purchase">Annuler</button>
+        <button type="button" class="btn-primary" id="save-edit-purchase">Enregistrer les modifications</button>
+      </div>
+      <div class="login-error" id="edit-purchase-error"></div>
+    `;
+
+    const removedLineIds = [];
+    body.querySelectorAll("[data-remove-line]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        removedLineIds.push(btn.dataset.removeLine);
+        btn.closest("tr").remove();
+      });
+    });
+
+    document.getElementById("cancel-edit-purchase").addEventListener("click", () => renderPurchaseView(p));
+
+    document.getElementById("save-edit-purchase").addEventListener("click", async () => {
+      const errorEl = document.getElementById("edit-purchase-error");
+      errorEl.textContent = "";
+      const saveBtn = document.getElementById("save-edit-purchase");
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Enregistrement...";
+
+      try {
+        for (const lineId of removedLineIds) {
+          await supabaseClient.from("purchase_lines").delete().eq("id", lineId);
+        }
+
+        let newTotal = 0;
+        const rows = body.querySelectorAll("#edit-purchase-lines-tbody tr[data-line-id]");
+        for (const row of rows) {
+          const lineId = row.dataset.lineId;
+          const label = row.querySelector(".edit-line-label").value.trim();
+          const qty = Math.round(parseFloat(row.querySelector(".edit-line-qty").value)) || 0;
+          const price = Math.round(parseFloat(row.querySelector(".edit-line-price").value)) || 0;
+          const lineTotal = qty * price;
+          newTotal += lineTotal;
+          await updatePurchaseLine(lineId, { label, quantity: qty, unit_price: price, line_total: lineTotal });
+        }
+
+        await updatePurchase(p.id, {
+          note: document.getElementById("edit-purchase-note").value.trim() || null,
+          total: newTotal,
+        });
+
+        toast("Achat modifié.", "success");
+        closeSaleModal();
+        refreshAll();
+      } catch (err) {
+        errorEl.textContent = "Erreur : " + err.message;
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Enregistrer les modifications";
+      }
+    });
   }
 
   await refreshAll();
