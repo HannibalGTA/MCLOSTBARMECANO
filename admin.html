@@ -157,6 +157,47 @@
     <div class="empty-state" id="employees-empty" style="display:none;">Aucun employé pour le moment.</div>
   </div>
 
+  <div class="card">
+    <div class="card-title"><h2>Codes promo</h2></div>
+    <p class="muted" style="margin-top:-6px;">Crée un code (10 caractères max) qui applique un pourcentage de réduction, valable au Bar et/ou au Garage.</p>
+    <form id="promo-form">
+      <input type="hidden" id="promo-id" />
+      <div class="grid-3">
+        <div>
+          <label for="promo-code">Nom du code</label>
+          <input type="text" id="promo-code" maxlength="10" placeholder="Ex : LOSTMC10" required style="text-transform:uppercase;" />
+        </div>
+        <div>
+          <label for="promo-percent">Réduction (%)</label>
+          <input type="number" id="promo-percent" min="1" max="100" step="1" inputmode="numeric" value="10" required />
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:16px;padding-bottom:14px;">
+          <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:0.85rem;margin:0;">
+            <input type="checkbox" id="promo-bar" style="width:auto;margin:0;" /> Bar
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:0.85rem;margin:0;">
+            <input type="checkbox" id="promo-mecano" style="width:auto;margin:0;" /> Garage
+          </label>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:0.85rem;">
+        <input type="checkbox" id="promo-active" style="width:auto;margin:0;" checked /> Code actif
+      </label>
+      <div class="flex-between" style="margin-top:10px;">
+        <button type="button" class="btn-ghost" id="promo-cancel-edit" style="display:none;">Annuler la modification</button>
+        <button type="submit" class="btn-primary">Enregistrer</button>
+      </div>
+      <div class="login-error" id="promo-form-error"></div>
+    </form>
+
+    <div class="card-title" style="margin-top:20px;"><h3 class="mt-0">Codes existants</h3></div>
+    <table>
+      <thead><tr><th>Code</th><th class="num">Réduction</th><th>Bar</th><th>Garage</th><th>Statut</th><th></th></tr></thead>
+      <tbody id="promo-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="promo-empty" style="display:none;">Aucun code promo créé.</div>
+  </div>
+
   <div class="card" style="border-color:var(--blood);">
     <div class="card-title"><h2 style="color:var(--blood-bright);">⚠ Zone dangereuse — Purge complète</h2></div>
     <p class="muted">Supprime définitivement <strong>toutes</strong> les ventes (bar + garage), toutes les dépenses/achats, et tous les versements de salaire. Le catalogue d'articles, les employés et les comptes de connexion ne sont jamais touchés. Une sauvegarde complète au format Google Sheet (.xlsx) est générée et téléchargée automatiquement <strong>avant</strong> toute suppression.</p>
@@ -181,6 +222,7 @@
     await refreshTable();
     renderPasswordRows();
     await refreshEmployees();
+    await refreshPromoCodes();
   }
 
   function renderPasswordRows() {
@@ -544,6 +586,112 @@
     } catch (err) {
       toast("Erreur : " + err.message, "error");
     }
+  }
+
+  // ---------- CODES PROMO ----------
+  let promoEditingId = null;
+
+  function resetPromoForm() {
+    promoEditingId = null;
+    document.getElementById("promo-form").reset();
+    document.getElementById("promo-id").value = "";
+    document.getElementById("promo-percent").value = "10";
+    document.getElementById("promo-active").checked = true;
+    document.getElementById("promo-cancel-edit").style.display = "none";
+    document.getElementById("promo-form-error").textContent = "";
+  }
+
+  document.getElementById("promo-cancel-edit").addEventListener("click", resetPromoForm);
+
+  document.getElementById("promo-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById("promo-form-error");
+    errorEl.textContent = "";
+
+    const code = document.getElementById("promo-code").value.trim().toUpperCase();
+    const percent = Math.round(parseFloat(document.getElementById("promo-percent").value));
+    const appliesBar = document.getElementById("promo-bar").checked;
+    const appliesMecano = document.getElementById("promo-mecano").checked;
+    const active = document.getElementById("promo-active").checked;
+
+    if (!code) return void (errorEl.textContent = "Indique un nom de code.");
+    if (code.length > 10) return void (errorEl.textContent = "10 caractères maximum.");
+    if (!percent || percent < 1 || percent > 100) return void (errorEl.textContent = "Réduction invalide (1 à 100%).");
+    if (!appliesBar && !appliesMecano) return void (errorEl.textContent = "Sélectionne au moins Bar ou Garage.");
+
+    const payload = {
+      code,
+      discount_percent: percent,
+      applies_bar: appliesBar,
+      applies_mecano: appliesMecano,
+      active,
+      updated_at: new Date().toISOString(),
+    };
+    if (promoEditingId) payload.id = promoEditingId;
+
+    try {
+      await upsertPromoCode(payload);
+      toast(promoEditingId ? "Code promo mis à jour." : "Code promo créé.", "success");
+      resetPromoForm();
+      await refreshPromoCodes();
+    } catch (err) {
+      errorEl.textContent = "Erreur : " + err.message + (err.message.includes("duplicate") ? " (ce code existe déjà)" : "");
+    }
+  });
+
+  async function refreshPromoCodes() {
+    const promos = await listPromoCodes();
+    const tbody = document.getElementById("promo-tbody");
+    const empty = document.getElementById("promo-empty");
+    tbody.innerHTML = "";
+    empty.style.display = promos.length ? "none" : "block";
+
+    for (const promo of promos) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="mono">${escapeHtml(promo.code)}</td>
+        <td class="num">${promo.discount_percent}%</td>
+        <td>${promo.applies_bar ? "✓" : "—"}</td>
+        <td>${promo.applies_mecano ? "✓" : "—"}</td>
+        <td>${promo.active ? '<span class="badge" style="background:rgba(76,154,95,0.2);color:var(--ok);">actif</span>' : '<span class="badge muted" style="border:1px solid #444;">inactif</span>'}</td>
+        <td>
+          <button class="btn-ghost btn-sm" data-action="edit-promo" data-id="${promo.id}">Modifier</button>
+          <button class="btn-danger btn-sm" data-action="delete-promo" data-id="${promo.id}">Supprimer</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    tbody.querySelectorAll('[data-action="edit-promo"]').forEach((btn) => {
+      btn.addEventListener("click", () => editPromo(btn.dataset.id, promos));
+    });
+    tbody.querySelectorAll('[data-action="delete-promo"]').forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const confirmed = await confirmDialog("Supprimer le code promo", "Supprimer définitivement ce code promo ?");
+        if (!confirmed) return;
+        try {
+          await deletePromoCode(btn.dataset.id);
+          toast("Code promo supprimé.", "success");
+          await refreshPromoCodes();
+        } catch (err) {
+          toast("Erreur : " + err.message, "error");
+        }
+      });
+    });
+  }
+
+  function editPromo(id, promos) {
+    const promo = promos.find((p) => p.id === id);
+    if (!promo) return;
+    promoEditingId = id;
+    document.getElementById("promo-id").value = id;
+    document.getElementById("promo-code").value = promo.code;
+    document.getElementById("promo-percent").value = promo.discount_percent;
+    document.getElementById("promo-bar").checked = promo.applies_bar;
+    document.getElementById("promo-mecano").checked = promo.applies_mecano;
+    document.getElementById("promo-active").checked = promo.active;
+    document.getElementById("promo-cancel-edit").style.display = "inline-block";
+    document.getElementById("promo-code").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   // ---------- ZONE DANGEREUSE : purge complète ----------
