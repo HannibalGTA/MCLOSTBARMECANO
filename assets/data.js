@@ -228,3 +228,15 @@ async function deletePromoCode(id) {
   const { error } = await supabaseClient.from("promo_codes").delete().eq("id", id);
   if (error) throw error;
 }
+
+// ---------- RÉGLAGES GÉNÉRAUX ----------
+async function getSetting(key, defaultValue) {
+  const { data, error } = await supabaseClient.from("app_settings").select("value").eq("key", key).maybeSingle();
+  if (error) throw error;
+  return data ? data.value : defaultValue;
+}
+
+async function setSetting(key, value) {
+  const { error } = await supabaseClient.from("app_settings").upsert({ key, value: String(value), updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
