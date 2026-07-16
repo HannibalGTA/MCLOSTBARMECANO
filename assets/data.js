@@ -80,6 +80,11 @@ async function updateSale(domain, id, patch) {
   if (error) throw error;
 }
 
+async function updateSaleLine(domain, lineId, patch) {
+  const { error } = await supabaseClient.from(saleLinesTable(domain)).update(patch).eq("id", lineId);
+  if (error) throw error;
+}
+
 // ---------- PURCHASES (achats) ----------
 /**
  * header: {domain, buyer_id, note, purchase_date}
@@ -117,6 +122,16 @@ async function listPurchases({ domain, from, to } = {}) {
 
 async function deletePurchase(id) {
   const { error } = await supabaseClient.from("purchases").delete().eq("id", id);
+  if (error) throw error;
+}
+
+async function updatePurchase(id, patch) {
+  const { error } = await supabaseClient.from("purchases").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+async function updatePurchaseLine(lineId, patch) {
+  const { error } = await supabaseClient.from("purchase_lines").update(patch).eq("id", lineId);
   if (error) throw error;
 }
 
