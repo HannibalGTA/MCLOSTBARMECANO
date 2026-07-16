@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Bilan Bar — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260716b" />
+<link rel="stylesheet" href="assets/style.css?v=20260717a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -61,19 +61,23 @@
 
   <div class="card">
     <div class="card-title"><h2>Ventes</h2></div>
-    <table>
-      <thead><tr><th>Date</th><th>Vendeur</th><th class="num">Total</th><th></th></tr></thead>
-      <tbody id="sales-tbody"></tbody>
-    </table>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Date</th><th>Vendeur</th><th class="num">Total</th><th></th></tr></thead>
+        <tbody id="sales-tbody"></tbody>
+      </table>
+    </div>
     <div class="empty-state" id="sales-empty" style="display:none;">Aucune vente sur cette période.</div>
   </div>
 
   <div class="card">
     <div class="card-title"><h2>Dépenses</h2></div>
-    <table>
-      <thead><tr><th>Date</th><th>Note</th><th class="num">Total</th><th></th></tr></thead>
-      <tbody id="purchases-tbody"></tbody>
-    </table>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Date</th><th>Note</th><th class="num">Total</th><th></th></tr></thead>
+        <tbody id="purchases-tbody"></tbody>
+      </table>
+    </div>
     <div class="empty-state" id="purchases-empty" style="display:none;">Aucun achat sur cette période.</div>
   </div>
 </div>
@@ -87,12 +91,12 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260716b"></script>
-<script src="assets/auth.js?v=20260716b"></script>
-<script src="assets/helpers.js?v=20260716b"></script>
-<script src="assets/data.js?v=20260716b"></script>
-<script src="assets/export.js?v=20260716b"></script>
-<script src="assets/bilan.js?v=20260716b"></script>
+<script src="assets/config.js?v=20260717a"></script>
+<script src="assets/auth.js?v=20260717a"></script>
+<script src="assets/helpers.js?v=20260717a"></script>
+<script src="assets/data.js?v=20260717a"></script>
+<script src="assets/export.js?v=20260717a"></script>
+<script src="assets/bilan.js?v=20260717a"></script>
 <script>
   initBilan("bar");
 </script>
