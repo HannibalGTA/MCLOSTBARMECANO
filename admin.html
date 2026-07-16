@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Administration — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260717b" />
+<link rel="stylesheet" href="assets/style.css?v=20260718b" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -158,6 +158,20 @@
   </div>
 
   <div class="card">
+    <div class="card-title"><h2>Réglages</h2></div>
+    <div class="field-row" style="align-items:flex-end;max-width:420px;">
+      <div>
+        <label for="low-stock-threshold">Seuil d'alerte "stock bas" (bilans)</label>
+        <input type="number" id="low-stock-threshold" min="0" step="1" inputmode="numeric" />
+      </div>
+      <div>
+        <button type="button" class="btn-secondary" id="save-threshold-btn" style="margin-bottom:14px;">Enregistrer</button>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:-8px;font-size:0.82rem;">Un article dont le stock passe sous ce nombre est marqué "bas" dans les bilans Bar et Mécano.</p>
+  </div>
+
+  <div class="card">
     <div class="card-title"><h2>Codes promo</h2></div>
     <p class="muted" style="margin-top:-6px;">Crée un code (10 caractères max) qui applique un pourcentage de réduction, valable au Bar et/ou au Garage.</p>
     <form id="promo-form">
@@ -205,11 +219,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260717b"></script>
-<script src="assets/auth.js?v=20260717b"></script>
-<script src="assets/helpers.js?v=20260717b"></script>
-<script src="assets/data.js?v=20260717b"></script>
-<script src="assets/export.js?v=20260717b"></script>
+<script src="assets/config.js?v=20260718b"></script>
+<script src="assets/auth.js?v=20260718b"></script>
+<script src="assets/helpers.js?v=20260718b"></script>
+<script src="assets/data.js?v=20260718b"></script>
+<script src="assets/export.js?v=20260718b"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
@@ -223,7 +237,28 @@
     renderPasswordRows();
     await refreshEmployees();
     await refreshPromoCodes();
+    await loadThreshold();
   }
+
+  async function loadThreshold() {
+    const value = await getSetting("low_stock_threshold", "10");
+    document.getElementById("low-stock-threshold").value = value;
+  }
+
+  document.getElementById("save-threshold-btn").addEventListener("click", async () => {
+    const input = document.getElementById("low-stock-threshold");
+    const value = Math.round(parseFloat(input.value));
+    if (isNaN(value) || value < 0) {
+      toast("Indique un nombre valide.", "error");
+      return;
+    }
+    try {
+      await setSetting("low_stock_threshold", value);
+      toast("Seuil d'alerte enregistré.", "success");
+    } catch (err) {
+      toast("Erreur : " + err.message, "error");
+    }
+  });
 
   function renderPasswordRows() {
     const wrap = document.getElementById("password-rows");
@@ -429,7 +464,7 @@
       ? `<img src="${item.image_data}" style="max-width:100%;max-height:100%;object-fit:contain;" />`
       : "";
     document.getElementById("cancel-edit").style.display = "inline-block";
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.getElementById("form-title").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function removeItem(id) {
