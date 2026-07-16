@@ -199,6 +199,8 @@ async function initBilan(domain) {
           plate: sale.plate,
           lines: sale.lines,
           total: sale.total,
+          promoCode: sale.promo_code || null,
+          discountPercent: sale.promo_discount_percent || null,
           note: sale.note,
         });
       });
