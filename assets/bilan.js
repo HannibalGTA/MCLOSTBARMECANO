@@ -160,6 +160,7 @@ async function initBilan(domain) {
         <div style="display:flex;gap:8px;">${invoiceButton}${editButton}</div>
       </div>
       ${extraInfo}
+      ${sale.promo_code ? `<p class="muted">Code promo appliqué : <strong>${escapeHtml(sale.promo_code)}</strong> (-${sale.promo_discount_percent}%)</p>` : ""}
       ${sale.note ? `<p class="muted">Note : ${escapeHtml(sale.note)}</p>` : ""}
       <table>
         <thead><tr><th>Article</th><th class="num">Qté</th><th class="num">P.U.</th><th class="num">Total</th>${isManager ? "<th></th>" : ""}</tr></thead>
