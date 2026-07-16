@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Administration — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260716b" />
+<link rel="stylesheet" href="assets/style.css?v=20260717a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -164,11 +164,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260716b"></script>
-<script src="assets/auth.js?v=20260716b"></script>
-<script src="assets/helpers.js?v=20260716b"></script>
-<script src="assets/data.js?v=20260716b"></script>
-<script src="assets/export.js?v=20260716b"></script>
+<script src="assets/config.js?v=20260717a"></script>
+<script src="assets/auth.js?v=20260717a"></script>
+<script src="assets/helpers.js?v=20260717a"></script>
+<script src="assets/data.js?v=20260717a"></script>
+<script src="assets/export.js?v=20260717a"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
@@ -488,7 +488,7 @@
         <td>${service}</td>
         <td>${escapeHtml(emp.job_role || "—")}</td>
         <td>${emp.contract_start_date ? formatDate(emp.contract_start_date) : "—"}</td>
-        <td>${emp.contract_file_data ? `<a href="${emp.contract_file_data}" download="${escapeHtml(emp.contract_file_name || "contrat")}" class="btn-ghost btn-sm" style="text-decoration:none;display:inline-block;">Télécharger</a>` : '<span class="muted">—</span>'}</td>
+        <td>${emp.contract_file_data ? `<button class="btn-ghost btn-sm" data-action="view-contract" data-id="${emp.id}">Voir</button>` : '<span class="muted">—</span>'}</td>
         <td>
           <button class="btn-ghost btn-sm" data-action="edit-emp" data-id="${emp.id}">Modifier</button>
           <button class="btn-danger btn-sm" data-action="delete-emp" data-id="${emp.id}">Supprimer</button>
@@ -497,6 +497,14 @@
       tbody.appendChild(tr);
     }
 
+    tbody.querySelectorAll('[data-action="view-contract"]').forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const emp = employees.find((e) => e.id === btn.dataset.id);
+        if (emp && emp.contract_file_data) {
+          viewFileInNewTab(emp.contract_file_data, emp.contract_file_type, emp.contract_file_name);
+        }
+      });
+    });
     tbody.querySelectorAll('[data-action="edit-emp"]').forEach((btn) => {
       btn.addEventListener("click", () => editEmployee(btn.dataset.id, employees));
     });
