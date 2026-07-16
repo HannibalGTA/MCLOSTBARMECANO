@@ -10,6 +10,12 @@ async function initBilan(domain) {
 
   const isManager = profile.role === "gestionnaire";
   const state = { from: null, to: null };
+  let lowStockThreshold = 10;
+  try {
+    lowStockThreshold = parseFloat(await getSetting("low_stock_threshold", "10")) || 10;
+  } catch (err) {
+    // garde la valeur par défaut si le réglage n'est pas accessible
+  }
 
   const fromInput = document.getElementById("filter-from");
   const toInput = document.getElementById("filter-to");
@@ -71,7 +77,7 @@ async function initBilan(domain) {
     for (const item of items) {
       const value = item.track_stock ? item.stock * item.buy_price : 0;
       stockValue += value;
-      const low = item.track_stock && item.stock <= 3;
+      const low = item.track_stock && item.stock < lowStockThreshold;
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${escapeHtml(item.name)} ${!item.track_stock ? '<span class="badge muted" style="border:1px solid #444;">prestation</span>' : ""}</td>
