@@ -33,7 +33,27 @@ function showInvoiceModal(data) {
     )
     .join("");
 
-  document.getElementById("inv-total").textContent = formatUSD(data.total || 0);
+  const subtotal = (data.lines || []).reduce((s, l) => s + Number(l.line_total), 0);
+  const total = data.total !== undefined && data.total !== null ? data.total : subtotal;
+  const discount = Math.max(0, Math.round(subtotal - total));
+
+  const subtotalRow = document.getElementById("inv-subtotal-row");
+  const discountRow = document.getElementById("inv-discount-row");
+  if (subtotalRow && discountRow) {
+    if (discount > 0) {
+      subtotalRow.style.display = "flex";
+      discountRow.style.display = "flex";
+      document.getElementById("inv-subtotal").textContent = formatUSD(subtotal);
+      const pct = data.discountPercent || (subtotal > 0 ? Math.round((discount / subtotal) * 100) : 0);
+      document.getElementById("inv-discount-label").textContent = data.promoCode ? `Réduction (${data.promoCode} -${pct}%)` : `Réduction (-${pct}%)`;
+      document.getElementById("inv-discount").textContent = "-" + formatUSD(discount);
+    } else {
+      subtotalRow.style.display = "none";
+      discountRow.style.display = "none";
+    }
+  }
+
+  document.getElementById("inv-total").textContent = formatUSD(total);
   document.getElementById("inv-note").textContent = data.note ? "Note : " + data.note : "";
   document.getElementById("invoice-modal").style.display = "flex";
 }
