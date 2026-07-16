@@ -37,6 +37,8 @@ function saleRowsFlat(sales, domain) {
       Date: formatDateTime(s.sale_date),
       Vendeur: s.seller_name || "",
       Total: Number(s.total),
+      "Code promo": s.promo_code || "",
+      "% Réduction": s.promo_discount_percent || "",
       Note: s.note || "",
     };
     if (domain === "mecano") {
