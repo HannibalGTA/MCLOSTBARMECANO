@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Salaires — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260716b" />
+<link rel="stylesheet" href="assets/style.css?v=20260717a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="theme-bar">
@@ -56,19 +56,21 @@
 
   <div class="card">
     <div class="card-title"><h2>Historique des versements — <span id="domain-label-2">Bar</span></h2></div>
-    <table>
-      <thead><tr><th>Date</th><th>Vendeur</th><th>Période</th><th class="num">Marge</th><th class="num">%</th><th class="num">Montant versé</th><th></th></tr></thead>
-      <tbody id="payments-tbody"></tbody>
-    </table>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Date</th><th>Vendeur</th><th>Période</th><th class="num">Marge</th><th class="num">%</th><th class="num">Montant versé</th><th></th></tr></thead>
+        <tbody id="payments-tbody"></tbody>
+      </table>
+    </div>
     <div class="empty-state" id="payments-empty" style="display:none;">Aucun versement enregistré.</div>
     <div class="ticket-total"><span>Total versé (tous temps, ce service)</span><span id="payments-total">$0</span></div>
   </div>
 </div>
 
-<script src="assets/config.js?v=20260716b"></script>
-<script src="assets/auth.js?v=20260716b"></script>
-<script src="assets/helpers.js?v=20260716b"></script>
-<script src="assets/data.js?v=20260716b"></script>
+<script src="assets/config.js?v=20260717a"></script>
+<script src="assets/auth.js?v=20260717a"></script>
+<script src="assets/helpers.js?v=20260717a"></script>
+<script src="assets/data.js?v=20260717a"></script>
 <script>
   let profile = null;
   let currentDomain = "bar";
