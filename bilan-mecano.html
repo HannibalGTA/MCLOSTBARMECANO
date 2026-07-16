@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Bilan Mécano — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260718a" />
+<link rel="stylesheet" href="assets/style.css?v=20260718c" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -117,6 +117,12 @@
         <thead><tr><th>Article</th><th class="num">Qté</th><th class="num">Prix</th><th class="num">Total</th></tr></thead>
         <tbody id="inv-lines"></tbody>
       </table>
+      <div class="invoice-meta" id="inv-subtotal-row" style="display:none;font-size:0.85rem;">
+        <span>Sous-total</span><span id="inv-subtotal"></span>
+      </div>
+      <div class="invoice-meta" id="inv-discount-row" style="display:none;font-size:0.85rem;color:#7a1013;">
+        <span id="inv-discount-label">Réduction</span><span id="inv-discount"></span>
+      </div>
       <div class="invoice-total">Total : <span id="inv-total"></span></div>
       <div id="inv-note" style="margin-top:12px;font-size:0.82rem;color:#555;"></div>
     </div>
@@ -130,13 +136,13 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260718a"></script>
-<script src="assets/auth.js?v=20260718a"></script>
-<script src="assets/helpers.js?v=20260718a"></script>
-<script src="assets/data.js?v=20260718a"></script>
-<script src="assets/invoice.js?v=20260718a"></script>
-<script src="assets/export.js?v=20260718a"></script>
-<script src="assets/bilan.js?v=20260718a"></script>
+<script src="assets/config.js?v=20260718c"></script>
+<script src="assets/auth.js?v=20260718c"></script>
+<script src="assets/helpers.js?v=20260718c"></script>
+<script src="assets/data.js?v=20260718c"></script>
+<script src="assets/invoice.js?v=20260718c"></script>
+<script src="assets/export.js?v=20260718c"></script>
+<script src="assets/bilan.js?v=20260718c"></script>
 <script>
   initBilan("mecano");
 </script>
