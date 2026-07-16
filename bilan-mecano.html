@@ -6,10 +6,11 @@
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Caisse Mécano — The Lost MC</title>
+<title>Bilan Mécano — The Lost MC</title>
 <link rel="stylesheet" href="assets/style.css?v=20260718a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="theme-mecano">
 <nav class="topbar" id="app-nav"></nav>
@@ -17,54 +18,76 @@
 <div class="page-wrap">
   <div class="page-title-row">
     <img src="assets/MCmecano.png" alt="The Lost MC Garage" class="page-header-logo" />
-    <h1>Caisse — Mécano</h1>
+    <h1>Bilan comptable — Mécano</h1>
   </div>
-  <p class="muted">Renseigne le client puis ajoute les pièces / prestations facturées.</p>
+  <p class="muted">Chiffre d'affaires, achats, marge et gestion du stock, avec détail par date.</p>
 
   <div class="card">
-    <div class="card-title"><h2>Informations client / véhicule</h2></div>
-    <div class="grid-3">
-      <div>
-        <label for="client-name">Nom du client</label>
-        <input type="text" id="client-name" placeholder="Ex : John Doe" />
+    <div class="flex-between">
+      <div class="field-row" style="max-width:460px;">
+        <div>
+          <label for="filter-from">Du</label>
+          <input type="date" id="filter-from" />
+        </div>
+        <div>
+          <label for="filter-to">Au</label>
+          <input type="date" id="filter-to" />
+        </div>
       </div>
-      <div>
-        <label for="plate">Plaque d'immatriculation</label>
-        <input type="text" id="plate" placeholder="Ex : 12ABC34" />
-      </div>
-      <div>
-        <label for="vehicle-model">Modèle du véhicule</label>
-        <input type="text" id="vehicle-model" placeholder="Ex : Bravado Buffalo" />
+      <div style="display:flex;gap:8px;">
+        <button class="btn-ghost" id="filter-reset">Réinitialiser</button>
+        <button class="btn-primary" id="filter-apply">Filtrer</button>
+        <button class="btn-secondary" id="export-sheet-btn">Exporter (Google Sheet)</button>
       </div>
     </div>
-    <label>Date</label>
-    <input type="text" id="sale-date-display" disabled />
   </div>
 
-  <div class="caisse-layout">
-    <div class="card">
-      <div class="card-title"><h2>Articles / prestations</h2></div>
-      <div class="item-grid" id="item-grid"></div>
-      <div class="empty-state" id="grid-empty" style="display:none;">Aucun article disponible. Demande au gestionnaire d'en créer.</div>
+  <div class="grid-3">
+    <div class="stat-box"><div class="num" id="stat-revenue">$0</div><div class="label">Chiffre d'affaires</div></div>
+    <div class="stat-box"><div class="num" id="stat-cost">$0</div><div class="label">Total achats</div></div>
+    <div class="stat-box"><div class="num" id="stat-margin">$0</div><div class="label">Marge</div></div>
+  </div>
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="stat-box"><div class="num" id="stat-sales-count">0</div><div class="label">Ventes sur la période</div></div>
+    <div class="stat-box"><div class="num" id="stat-stock-value">$0</div><div class="label">Valeur du stock actuel</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><h2>Stock — Articles Mécano</h2></div>
+    <table>
+      <thead><tr><th>Article</th><th class="num">Stock</th><th class="num">Prix achat</th><th class="num">Prix vente</th><th class="num">Valeur stock</th></tr></thead>
+      <tbody id="stock-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><h2>Ventes</h2></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Date</th><th>Vendeur</th><th>Client / Véhicule</th><th class="num">Total</th><th></th></tr></thead>
+        <tbody id="sales-tbody"></tbody>
+      </table>
     </div>
+    <div class="empty-state" id="sales-empty" style="display:none;">Aucune vente sur cette période.</div>
+  </div>
 
-    <div class="card">
-      <div class="card-title"><h2>Ticket</h2></div>
-      <div class="ticket" id="ticket">
-        <div class="empty-state" id="ticket-empty">Le ticket est vide.</div>
-      </div>
-      <label for="promo-select" style="margin-top:10px;">Code promo (optionnel, non cumulable)</label>
-      <select id="promo-select"><option value="">Aucun code</option></select>
-      <div class="ticket-total" id="subtotal-row" style="display:none;font-size:1rem;border-top:none;padding-top:0;margin-top:0;"><span>Sous-total</span><span id="ticket-subtotal">$0</span></div>
-      <div class="ticket-total" id="discount-row" style="display:none;font-size:1rem;border-top:none;padding-top:0;margin-top:0;color:var(--ok);"><span id="discount-label">Réduction</span><span id="ticket-discount">-$0</span></div>
-      <div class="ticket-total"><span>Total</span><span id="ticket-total">$0</span></div>
-      <label for="total-override" style="margin-top:10px;">Total à facturer (modifiable, ex : réduction)</label>
-      <input type="number" id="total-override" min="0" step="1" inputmode="numeric" />
-      <label for="sale-note" style="margin-top:14px;">Note (optionnel)</label>
-      <textarea id="sale-note" rows="2" placeholder="Détails de l'intervention..."></textarea>
+  <div class="card">
+    <div class="card-title"><h2>Dépenses</h2></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Date</th><th>Note</th><th class="num">Total</th><th></th></tr></thead>
+        <tbody id="purchases-tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="purchases-empty" style="display:none;">Aucun achat sur cette période.</div>
+  </div>
+</div>
 
-      <button class="btn-secondary" id="preview-devis" style="width:100%;margin-bottom:10px;" disabled>Aperçu devis</button>
-      <button class="btn-primary" id="validate-sale" style="width:100%;" disabled>Enregistrer la facture</button>
+<div class="modal-backdrop" id="sale-modal" style="display:none;">
+  <div class="modal-box">
+    <div id="sale-modal-body"></div>
+    <div class="flex-between" style="margin-top:16px;">
+      <button class="btn-ghost" id="close-sale-modal">Fermer</button>
     </div>
   </div>
 </div>
@@ -112,213 +135,10 @@
 <script src="assets/helpers.js?v=20260718a"></script>
 <script src="assets/data.js?v=20260718a"></script>
 <script src="assets/invoice.js?v=20260718a"></script>
+<script src="assets/export.js?v=20260718a"></script>
+<script src="assets/bilan.js?v=20260718a"></script>
 <script>
-  const domain = "mecano";
-  let items = [];
-  let cart = [];
-  let profile = null;
-  let totalManuallySet = false;
-  let promoCodes = [];
-
-  document.getElementById("total-override").addEventListener("input", () => {
-    totalManuallySet = true;
-  });
-  document.getElementById("promo-select").addEventListener("change", () => {
-    totalManuallySet = false;
-    renderTicket();
-  });
-
-  async function init() {
-    profile = await requireRole(["mecano", "gestionnaire"]);
-    if (!profile) return;
-    document.getElementById("sale-date-display").value = formatDate(new Date());
-    await loadItems();
-    await loadPromoCodes();
-  }
-
-  async function loadPromoCodes() {
-    const all = await listPromoCodes();
-    promoCodes = all.filter((p) => p.active && p.applies_mecano);
-    const select = document.getElementById("promo-select");
-    select.innerHTML =
-      '<option value="">Aucun code</option>' +
-      promoCodes.map((p) => `<option value="${p.id}">${escapeHtml(p.code)} (-${p.discount_percent}%)</option>`).join("");
-  }
-
-  async function loadItems() {
-    items = await listItems(domain, { onlyActive: true });
-    renderGrid();
-  }
-
-  function renderGrid() {
-    const grid = document.getElementById("item-grid");
-    grid.innerHTML = "";
-    document.getElementById("grid-empty").style.display = items.length ? "none" : "block";
-    for (const item of items) {
-      const inCart = cart.find((c) => c.item_id === item.id);
-      const remaining = item.track_stock ? item.stock - (inCart ? inCart.quantity : 0) : Infinity;
-      const card = document.createElement("div");
-      card.className = "item-card" + (remaining <= 0 ? " out-of-stock" : "");
-      card.innerHTML = `
-        ${item.track_stock ? `<div class="item-stock-badge">${item.stock}</div>` : ""}
-        <div class="item-img-box">${item.image_data ? `<img src="${item.image_data}" />` : '<span class="muted" style="font-size:1.6rem;">?</span>'}</div>
-        <div class="item-name">${escapeHtml(item.name)}</div>
-        <div class="item-price">${formatUSD(item.sell_price)}</div>
-      `;
-      if (remaining > 0) card.addEventListener("click", () => addToCart(item));
-      grid.appendChild(card);
-    }
-  }
-
-  function addToCart(item) {
-    const existing = cart.find((c) => c.item_id === item.id);
-    if (existing) {
-      if (item.track_stock && existing.quantity >= item.stock) return toast("Stock insuffisant pour cet article.", "error");
-      existing.quantity += 1;
-      existing.line_total = existing.quantity * existing.unit_price;
-    } else {
-      cart.push({ item_id: item.id, item_name: item.name, unit_price: item.sell_price, buy_price: item.buy_price, quantity: 1, line_total: item.sell_price, max_stock: item.track_stock ? item.stock : Infinity });
-    }
-    renderTicket();
-    renderGrid();
-  }
-
-  function changeQty(itemId, delta) {
-    const line = cart.find((c) => c.item_id === itemId);
-    if (!line) return;
-    const newQty = line.quantity + delta;
-    if (newQty <= 0) {
-      cart = cart.filter((c) => c.item_id !== itemId);
-    } else if (newQty > line.max_stock) {
-      toast("Stock insuffisant.", "error");
-      return;
-    } else {
-      line.quantity = newQty;
-      line.line_total = newQty * line.unit_price;
-    }
-    renderTicket();
-    renderGrid();
-  }
-
-  function getSelectedPromo() {
-    const id = document.getElementById("promo-select").value;
-    return id ? promoCodes.find((p) => p.id === id) : null;
-  }
-
-  function renderTicket() {
-    const ticket = document.getElementById("ticket");
-    const subtotal = cart.reduce((s, l) => s + l.line_total, 0);
-    const promo = getSelectedPromo();
-    const discount = promo ? Math.round((subtotal * promo.discount_percent) / 100) : 0;
-    const total = Math.max(0, subtotal - discount);
-
-    document.getElementById("subtotal-row").style.display = promo ? "flex" : "none";
-    document.getElementById("discount-row").style.display = promo ? "flex" : "none";
-    document.getElementById("ticket-subtotal").textContent = formatUSD(subtotal);
-    if (promo) {
-      document.getElementById("discount-label").textContent = `Réduction (${promo.code} -${promo.discount_percent}%)`;
-      document.getElementById("ticket-discount").textContent = "-" + formatUSD(discount);
-    }
-    document.getElementById("ticket-total").textContent = formatUSD(total);
-    if (!totalManuallySet) {
-      document.getElementById("total-override").value = Math.round(total);
-    }
-    document.getElementById("validate-sale").disabled = cart.length === 0;
-    document.getElementById("preview-devis").disabled = cart.length === 0;
-
-    if (cart.length === 0) {
-      ticket.innerHTML = '<div class="empty-state" id="ticket-empty">Le ticket est vide.</div>';
-      return;
-    }
-    ticket.innerHTML = cart
-      .map(
-        (l) => `
-      <div class="ticket-line">
-        <div>
-          <div>${escapeHtml(l.item_name)}</div>
-          <div class="muted mono" style="font-size:0.75rem;">${formatUSD(l.unit_price)} / unité</div>
-        </div>
-        <div class="qty-stepper">
-          <button type="button" class="btn-ghost btn-sm" data-minus="${l.item_id}">−</button>
-          <span class="mono">${l.quantity}</span>
-          <button type="button" class="btn-ghost btn-sm" data-plus="${l.item_id}">+</button>
-        </div>
-        <div class="mono" style="width:70px;text-align:right;">${formatUSD(l.line_total)}</div>
-      </div>`
-      )
-      .join("");
-    ticket.querySelectorAll("[data-plus]").forEach((b) => b.addEventListener("click", () => changeQty(b.dataset.plus, 1)));
-    ticket.querySelectorAll("[data-minus]").forEach((b) => b.addEventListener("click", () => changeQty(b.dataset.minus, -1)));
-  }
-
-  function currentInvoiceData(docTypeLabel, totalOverride) {
-    const total = totalOverride !== null && totalOverride !== undefined ? totalOverride : cart.reduce((s, l) => s + l.line_total, 0);
-    const promo = getSelectedPromo();
-    const note = document.getElementById("sale-note").value.trim();
-    const promoNote = promo ? `Code promo appliqué : ${promo.code} (-${promo.discount_percent}%)` : "";
-    return {
-      docType: docTypeLabel,
-      date: new Date(),
-      client: document.getElementById("client-name").value.trim(),
-      vehicle: document.getElementById("vehicle-model").value.trim(),
-      plate: document.getElementById("plate").value.trim(),
-      lines: cart,
-      total,
-      note: [note, promoNote].filter(Boolean).join(" — "),
-    };
-  }
-
-  document.getElementById("preview-devis").addEventListener("click", () => {
-    const previewTotal = Math.round(parseFloat(document.getElementById("total-override").value)) || 0;
-    showInvoiceModal(currentInvoiceData("Devis", previewTotal));
-  });
-
-  document.getElementById("validate-sale").addEventListener("click", async () => {
-    if (cart.length === 0) return;
-    const finalTotal = Math.round(parseFloat(document.getElementById("total-override").value)) || 0;
-    const promo = getSelectedPromo();
-
-    const confirmed = await confirmDialog("Confirmer la facture", `Enregistrer cette facture pour un total de ${formatUSD(finalTotal)} ?`);
-    if (!confirmed) return;
-
-    const btn = document.getElementById("validate-sale");
-    btn.disabled = true;
-    btn.textContent = "Enregistrement...";
-    try {
-      await createSale(
-        domain,
-        {
-          seller_id: profile.id,
-          seller_name: sellerDisplayName(profile),
-          client_name: document.getElementById("client-name").value.trim() || null,
-          plate: document.getElementById("plate").value.trim() || null,
-          vehicle_model: document.getElementById("vehicle-model").value.trim() || null,
-          doc_type: "facture",
-          note: document.getElementById("sale-note").value.trim() || null,
-          promo_code: promo ? promo.code : null,
-          promo_discount_percent: promo ? promo.discount_percent : null,
-          sale_date: new Date().toISOString(),
-        },
-        cart.map(({ max_stock, ...rest }) => rest),
-        finalTotal
-      );
-      toast("Facture enregistrée.", "success");
-      showInvoiceModal(currentInvoiceData("Facture", finalTotal));
-      cart = [];
-      totalManuallySet = false;
-      document.getElementById("sale-note").value = "";
-      document.getElementById("promo-select").value = "";
-      renderTicket();
-      await loadItems();
-    } catch (err) {
-      toast("Erreur : " + err.message, "error");
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Enregistrer la facture";
-    }
-  });
-
-  init();
+  initBilan("mecano");
 </script>
 </body>
 </html>
