@@ -210,6 +210,31 @@ function readFileAsDataUrl(file, maxBytes) {
 
 const MAX_CONTRACT_BYTES = 100 * 1024;
 
+/**
+ * Ouvre un fichier stocké en base64 (contrat) dans un nouvel onglet pour le visualiser,
+ * plutôt que de forcer son téléchargement. Fonctionne pour PDF et images ; pour les
+ * autres types, propose un lien de téléchargement en secours.
+ */
+function viewFileInNewTab(dataUrl, mimeType, fileName) {
+  const win = window.open("", "_blank");
+  if (!win) {
+    toast("Autorise les pop-ups pour visualiser ce fichier.", "error");
+    return;
+  }
+  let bodyContent;
+  if (mimeType && mimeType.startsWith("image/")) {
+    bodyContent = `<img src="${dataUrl}" style="max-width:100%;display:block;margin:0 auto;" />`;
+  } else if (mimeType === "application/pdf") {
+    bodyContent = `<embed src="${dataUrl}" type="application/pdf" style="width:100%;height:100vh;border:none;" />`;
+  } else {
+    bodyContent = `<div style="font-family:sans-serif;padding:24px;color:#eee;">Aperçu non disponible pour ce type de fichier.<br><a href="${dataUrl}" download="${fileName || "fichier"}" style="color:#f2ede4;">Télécharger le fichier</a></div>`;
+  }
+  win.document.write(
+    `<!DOCTYPE html><html><head><title>${(fileName || "Document").replace(/</g, "")}</title></head><body style="margin:0;background:#1c1c20;">${bodyContent}</body></html>`
+  );
+  win.document.close();
+}
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str ?? "";
