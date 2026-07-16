@@ -210,3 +210,21 @@ async function purgeAllTransactions() {
   const rejected = results.find((r) => r.status === "rejected");
   if (rejected) throw rejected.reason;
 }
+
+// ---------- CODES PROMO ----------
+async function listPromoCodes() {
+  const { data, error } = await supabaseClient.from("promo_codes").select("*").order("code");
+  if (error) throw error;
+  return data;
+}
+
+async function upsertPromoCode(promo) {
+  const { data, error } = await supabaseClient.from("promo_codes").upsert(promo).select();
+  if (error) throw error;
+  return data[0];
+}
+
+async function deletePromoCode(id) {
+  const { error } = await supabaseClient.from("promo_codes").delete().eq("id", id);
+  if (error) throw error;
+}
