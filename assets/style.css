@@ -319,6 +319,50 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); }
   .page-header-logo { width: 42px; height: 42px; }
 }
 
+/* ---------- Tableaux longs : ascenseur interne (8-10 lignes visibles) ---------- */
+.table-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.table-scroll table { margin: 0; }
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+}
+.table-scroll tbody td, .table-scroll thead th { padding-left: 10px; padding-right: 10px; }
+
+/* ---------- Layout caisse (grille articles + ticket) ---------- */
+.caisse-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .caisse-layout { grid-template-columns: 1fr; }
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 600px) {
+  .page-wrap { padding: 14px 10px 40px; }
+  h1 { font-size: 1.5rem; }
+  .card { padding: 14px; }
+  .item-grid { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 10px; }
+  .item-card .item-name { font-size: 0.72rem; }
+  .item-card .item-price { font-size: 0.75rem; }
+  input, select, textarea, button { font-size: 16px; } /* évite le zoom automatique sur iOS */
+  button, .btn { padding: 10px 14px; }
+  .topbar { padding: 12px 14px; }
+  .nav-brand-top { font-size: 1.1rem; }
+  .grid-3 { grid-template-columns: 1fr; }
+  table { font-size: 0.8rem; }
+  .field-row { flex-direction: column; gap: 0; }
+}
+
 /* ---------- Utility ---------- */
 .muted { color: var(--steel); }
 .mt-0 { margin-top: 0; }
