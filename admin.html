@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Administration — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260720b" />
+<link rel="stylesheet" href="assets/style.css?v=20260720c" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -125,6 +125,10 @@
 
     <div class="card">
       <div class="card-title"><h2>Catalogue — <span id="catalog-domain-label">Bar</span></h2></div>
+      <div id="catalog-category-filter-wrap" style="display:none;margin-bottom:14px;">
+        <label for="catalog-category-filter">Filtrer par catégorie</label>
+        <select id="catalog-category-filter"><option value="">Toutes les catégories</option></select>
+      </div>
       <div id="items-table-wrap">
         <table>
           <thead id="items-thead">
@@ -264,11 +268,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260720b"></script>
-<script src="assets/auth.js?v=20260720b"></script>
-<script src="assets/helpers.js?v=20260720b"></script>
-<script src="assets/data.js?v=20260720b"></script>
-<script src="assets/export.js?v=20260720b"></script>
+<script src="assets/config.js?v=20260720c"></script>
+<script src="assets/auth.js?v=20260720c"></script>
+<script src="assets/helpers.js?v=20260720c"></script>
+<script src="assets/data.js?v=20260720c"></script>
+<script src="assets/export.js?v=20260720c"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
@@ -372,10 +376,12 @@
     document.body.className = domain === "bar" ? "theme-bar" : "theme-mecano";
     document.getElementById("page-logo").src = domain === "bar" ? "assets/MCbar.png" : "assets/MCmecano.png";
     document.getElementById("mecano-categories-card").style.display = domain === "mecano" ? "block" : "none";
+    document.getElementById("catalog-category-filter-wrap").style.display = domain === "mecano" ? "block" : "none";
 
     if (domain === "mecano") {
       await loadMecanoCategories();
       await refreshCategoriesTable();
+      populateCatalogCategoryFilter();
     }
 
     resetForm();
@@ -541,6 +547,16 @@
     }
   });
 
+  function populateCatalogCategoryFilter() {
+    const select = document.getElementById("catalog-category-filter");
+    const current = select.value;
+    select.innerHTML =
+      '<option value="">Toutes les catégories</option>' +
+      mecanoCategories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+    select.value = current;
+  }
+  document.getElementById("catalog-category-filter").addEventListener("change", refreshTable);
+
   // ---------- CATALOGUE ----------
   async function refreshTable() {
     const tbody = document.getElementById("items-tbody");
@@ -577,11 +593,11 @@
       wireItemRowActions(tbody, items);
     } else {
       thead.innerHTML = `<tr><th></th><th>Nom</th><th>Catégorie</th><th class="num">Achat</th><th class="num">Vente</th><th class="num">Stock</th><th></th></tr>`;
-      const items = await listMecanoItemsWithCategory();
+      const allItems = await listMecanoItemsWithCategory();
+      const filterValue = document.getElementById("catalog-category-filter").value;
+      const items = filterValue ? allItems.filter((i) => i.category_id === filterValue) : allItems;
       tbody.innerHTML = "";
       empty.style.display = items.length ? "none" : "block";
-
-      const categoryOptions = mecanoCategories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
 
       for (const [idx, item] of items.entries()) {
         const isPrestation = item.category && item.category.type === "prestation";
@@ -594,12 +610,7 @@
             </div>
           </td>
           <td>${escapeHtml(item.name)} ${!item.active ? '<span class="badge muted" style="border:1px solid #444;">inactif</span>' : ""}</td>
-          <td>
-            <select data-action="change-category" data-id="${item.id}" style="margin-bottom:0;">
-              <option value="">— Aucune —</option>
-              ${categoryOptions}
-            </select>
-          </td>
+          <td>${item.category ? escapeHtml(item.category.name) : '<span class="muted">Sans catégorie</span>'}</td>
           <td class="num">${isPrestation ? '<span class="muted">—</span>' : formatUSD(item.buy_price)}</td>
           <td class="num">${formatUSD(item.sell_price)}</td>
           <td class="num">${isPrestation ? '<span class="muted">—</span>' : item.stock}</td>
@@ -609,20 +620,8 @@
           </td>
         `;
         tbody.appendChild(tr);
-        tr.querySelector('[data-action="change-category"]').value = item.category_id || "";
       }
 
-      tbody.querySelectorAll('[data-action="change-category"]').forEach((sel) => {
-        sel.addEventListener("change", async () => {
-          try {
-            await updateItem("mecano", sel.dataset.id, { category_id: sel.value || null });
-            toast("Catégorie mise à jour.", "success");
-            await refreshTable();
-          } catch (err) {
-            toast("Erreur : " + err.message, "error");
-          }
-        });
-      });
       wireItemRowActions(tbody, items);
     }
   }
