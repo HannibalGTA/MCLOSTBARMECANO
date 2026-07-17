@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Caisse Mécano — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260718c" />
+<link rel="stylesheet" href="assets/style.css?v=20260720a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
@@ -44,6 +44,8 @@
   <div class="caisse-layout">
     <div class="card">
       <div class="card-title"><h2>Articles / prestations</h2></div>
+      <label for="category-filter">Catégorie</label>
+      <select id="category-filter" style="max-width:320px;"><option value="">Toutes les catégories</option></select>
       <div class="item-grid" id="item-grid"></div>
       <div class="empty-state" id="grid-empty" style="display:none;">Aucun article disponible. Demande au gestionnaire d'en créer.</div>
     </div>
@@ -113,11 +115,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260718c"></script>
-<script src="assets/auth.js?v=20260718c"></script>
-<script src="assets/helpers.js?v=20260718c"></script>
-<script src="assets/data.js?v=20260718c"></script>
-<script src="assets/invoice.js?v=20260718c"></script>
+<script src="assets/config.js?v=20260720a"></script>
+<script src="assets/auth.js?v=20260720a"></script>
+<script src="assets/helpers.js?v=20260720a"></script>
+<script src="assets/data.js?v=20260720a"></script>
+<script src="assets/invoice.js?v=20260720a"></script>
 <script>
   const domain = "mecano";
   let items = [];
@@ -140,6 +142,7 @@
     document.getElementById("sale-date-display").value = formatDate(new Date());
     await loadItems();
     await loadPromoCodes();
+    await loadCategoryFilter();
   }
 
   async function loadPromoCodes() {
@@ -151,16 +154,27 @@
       promoCodes.map((p) => `<option value="${p.id}">${escapeHtml(p.code)} (-${p.discount_percent}%)</option>`).join("");
   }
 
+  async function loadCategoryFilter() {
+    const categories = await listMecanoCategories();
+    const select = document.getElementById("category-filter");
+    select.innerHTML =
+      '<option value="">Toutes les catégories</option>' +
+      categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+  }
+  document.getElementById("category-filter").addEventListener("change", renderGrid);
+
   async function loadItems() {
-    items = await listItems(domain, { onlyActive: true });
+    items = await listMecanoItemsWithCategory({ onlyActive: true });
     renderGrid();
   }
 
   function renderGrid() {
     const grid = document.getElementById("item-grid");
+    const selectedCategory = document.getElementById("category-filter").value;
+    const visibleItems = selectedCategory ? items.filter((i) => i.category_id === selectedCategory) : items;
     grid.innerHTML = "";
-    document.getElementById("grid-empty").style.display = items.length ? "none" : "block";
-    for (const item of items) {
+    document.getElementById("grid-empty").style.display = visibleItems.length ? "none" : "block";
+    for (const item of visibleItems) {
       const inCart = cart.find((c) => c.item_id === item.id);
       const remaining = item.track_stock ? item.stock - (inCart ? inCart.quantity : 0) : Infinity;
       const card = document.createElement("div");
