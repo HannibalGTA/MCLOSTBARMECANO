@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Administration — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260721c" />
+<link rel="stylesheet" href="assets/style.css?v=20260722a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -273,11 +273,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260721c"></script>
-<script src="assets/auth.js?v=20260721c"></script>
-<script src="assets/helpers.js?v=20260721c"></script>
-<script src="assets/data.js?v=20260721c"></script>
-<script src="assets/export.js?v=20260721c"></script>
+<script src="assets/config.js?v=20260722a"></script>
+<script src="assets/auth.js?v=20260722a"></script>
+<script src="assets/helpers.js?v=20260722a"></script>
+<script src="assets/data.js?v=20260722a"></script>
+<script src="assets/export.js?v=20260722a"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
@@ -559,8 +559,10 @@
   function populateCatalogCategoryFilter() {
     const select = document.getElementById("catalog-category-filter");
     const current = select.value;
-    select.innerHTML = mecanoCategories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
-    if (mecanoCategories.some((c) => c.id === current)) {
+    select.innerHTML =
+      mecanoCategories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("") +
+      `<option value="__none__">— Sans catégorie —</option>`;
+    if (current === "__none__" || mecanoCategories.some((c) => c.id === current)) {
       select.value = current;
     } else if (mecanoCategories.length) {
       select.value = mecanoCategories[0].id;
@@ -606,7 +608,8 @@
     } else {
       document.getElementById("items-table").classList.add("table-compact");
       const filterValue = document.getElementById("catalog-category-filter").value;
-      const filterCategory = mecanoCategories.find((c) => c.id === filterValue);
+      const isNoneFilter = filterValue === "__none__";
+      const filterCategory = isNoneFilter ? null : mecanoCategories.find((c) => c.id === filterValue);
       const filterIsPrestation = filterCategory && filterCategory.type === "prestation";
 
       // Prestation : ni Catégorie, ni Achat, ni Stock (toujours "—" de toute façon, puisque
@@ -616,7 +619,10 @@
         : `<tr><th></th><th>Nom</th><th class="num">Achat</th><th class="num">Vente</th><th class="num">Stock</th><th></th></tr>`;
 
       const allItems = await listMecanoItemsWithCategory();
-      const items = filterValue ? allItems.filter((i) => i.category_id === filterValue) : allItems;
+      let items;
+      if (isNoneFilter) items = allItems.filter((i) => !i.category_id);
+      else if (filterValue) items = allItems.filter((i) => i.category_id === filterValue);
+      else items = allItems;
       tbody.innerHTML = "";
       empty.style.display = items.length ? "none" : "block";
 
@@ -636,10 +642,11 @@
         const actionsCell = `
           <button class="btn-ghost btn-sm" data-action="edit" data-id="${item.id}">Modifier</button>
           <button class="btn-danger btn-sm" data-action="delete" data-id="${item.id}">Supprimer</button>`;
+        const stockCell = item.track_stock ? item.stock : '<span class="muted">Illimité</span>';
 
         tr.innerHTML = filterIsPrestation
           ? `<td>${moveButtons}</td><td>${nameCell}</td><td class="num">${formatUSD(item.sell_price)}</td><td>${actionsCell}</td>`
-          : `<td>${moveButtons}</td><td>${nameCell}</td><td class="num">${formatUSD(item.buy_price)}</td><td class="num">${formatUSD(item.sell_price)}</td><td class="num">${item.stock}</td><td>${actionsCell}</td>`;
+          : `<td>${moveButtons}</td><td>${nameCell}</td><td class="num">${formatUSD(item.buy_price)}</td><td class="num">${formatUSD(item.sell_price)}</td><td class="num">${stockCell}</td><td>${actionsCell}</td>`;
         tbody.appendChild(tr);
       }
 
