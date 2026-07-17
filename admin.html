@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Administration — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260721a" />
+<link rel="stylesheet" href="assets/style.css?v=20260721b" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -57,6 +57,9 @@
           <button type="submit" class="btn-secondary" style="margin-bottom:14px;">Enregistrer</button>
         </div>
       </div>
+      <label>Couleur</label>
+      <input type="hidden" id="category-color" value="" />
+      <div id="category-color-swatches" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;"></div>
       <div class="login-error" id="category-form-error"></div>
     </form>
     </div>
@@ -270,11 +273,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260721a"></script>
-<script src="assets/auth.js?v=20260721a"></script>
-<script src="assets/helpers.js?v=20260721a"></script>
-<script src="assets/data.js?v=20260721a"></script>
-<script src="assets/export.js?v=20260721a"></script>
+<script src="assets/config.js?v=20260721b"></script>
+<script src="assets/auth.js?v=20260721b"></script>
+<script src="assets/helpers.js?v=20260721b"></script>
+<script src="assets/data.js?v=20260721b"></script>
+<script src="assets/export.js?v=20260721b"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
@@ -619,6 +622,11 @@
 
       for (const [idx, item] of items.entries()) {
         const tr = document.createElement("tr");
+        const catColor = (item.category && item.category.color) || filterCategory?.color;
+        if (catColor) {
+          tr.style.background = hexToRgba(catColor, 0.07);
+          tr.style.borderLeft = `3px solid ${catColor}`;
+        }
         const moveButtons = `
           <div style="display:flex;flex-direction:column;gap:2px;">
             <button class="btn-ghost btn-sm" data-action="move-up" data-id="${item.id}" ${idx === 0 ? "disabled" : ""} title="Monter">▲</button>
@@ -723,6 +731,22 @@
   // ---------- CATÉGORIES MÉCANO ----------
   let categoryEditingId = null;
 
+  renderColorSwatches();
+  function renderColorSwatches() {
+    const wrap = document.getElementById("category-color-swatches");
+    wrap.innerHTML = CATEGORY_COLOR_PALETTE.map((hex) => `<button type="button" class="color-swatch" data-color="${hex}" style="background:${hex};color:${hex};"></button>`).join("");
+    wrap.querySelectorAll(".color-swatch").forEach((btn) => {
+      btn.addEventListener("click", () => setSelectedColor(btn.dataset.color));
+    });
+  }
+
+  function setSelectedColor(hex) {
+    document.getElementById("category-color").value = hex;
+    document.querySelectorAll("#category-color-swatches .color-swatch").forEach((btn) => {
+      btn.classList.toggle("selected", btn.dataset.color === hex);
+    });
+  }
+
   document.getElementById("category-cancel-edit").addEventListener("click", resetCategoryForm);
 
   function resetCategoryForm() {
@@ -733,6 +757,7 @@
     document.getElementById("category-form-error").textContent = "";
     document.getElementById("category-form-title").innerHTML = "Catégories Mécano";
     document.getElementById("category-form-box").classList.remove("editing-highlight");
+    setSelectedColor(CATEGORY_COLOR_PALETTE[0]);
   }
 
   document.getElementById("category-form").addEventListener("submit", async (e) => {
@@ -742,12 +767,13 @@
 
     const name = document.getElementById("category-name").value.trim();
     const type = document.getElementById("category-type").value;
+    const color = document.getElementById("category-color").value || CATEGORY_COLOR_PALETTE[0];
     if (!name) {
       errorEl.textContent = "Indique un nom de catégorie.";
       return;
     }
 
-    const payload = { name, type };
+    const payload = { name, type, color };
     if (categoryEditingId) payload.id = categoryEditingId;
     else payload.sort_order = 9999; // place les nouvelles catégories en fin de liste par défaut
 
@@ -771,6 +797,8 @@
 
     for (const [idx, cat] of mecanoCategories.entries()) {
       const tr = document.createElement("tr");
+      tr.style.background = hexToRgba(cat.color, 0.08);
+      tr.style.borderLeft = `3px solid ${cat.color || CATEGORY_COLOR_PALETTE[9]}`;
       tr.innerHTML = `
         <td>
           <div style="display:flex;flex-direction:column;gap:2px;">
@@ -778,7 +806,7 @@
             <button class="btn-ghost btn-sm" data-action="move-cat-down" data-id="${cat.id}" ${idx === mecanoCategories.length - 1 ? "disabled" : ""} title="Descendre">▼</button>
           </div>
         </td>
-        <td>${escapeHtml(cat.name)}</td>
+        <td><span class="category-color-dot" style="background:${cat.color || CATEGORY_COLOR_PALETTE[9]};"></span>${escapeHtml(cat.name)}</td>
         <td>${cat.type === "prestation" ? "Prestation" : "Stockable"}</td>
         <td>
           <button class="btn-ghost btn-sm" data-action="edit-cat" data-id="${cat.id}">Modifier</button>
@@ -802,6 +830,7 @@
         document.getElementById("category-id").value = cat.id;
         document.getElementById("category-name").value = cat.name;
         document.getElementById("category-type").value = cat.type;
+        setSelectedColor(cat.color || CATEGORY_COLOR_PALETTE[0]);
         document.getElementById("category-cancel-edit").style.display = "inline-block";
         document.getElementById("category-form-title").innerHTML = `Modifier — ${escapeHtml(cat.name)} <span class="editing-badge">Modification</span>`;
         document.getElementById("category-form-box").classList.add("editing-highlight");
