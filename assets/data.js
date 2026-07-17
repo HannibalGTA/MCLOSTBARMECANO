@@ -31,6 +31,14 @@ async function upsertItem(domain, item) {
   return data[0];
 }
 
+async function updateItem(domain, id, patch) {
+  const { error } = await supabaseClient
+    .from(itemsTable(domain))
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 async function deleteItem(domain, id) {
   const { error } = await supabaseClient.from(itemsTable(domain)).delete().eq("id", id);
   if (error) throw error;
