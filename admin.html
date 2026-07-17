@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Administration — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260719a" />
+<link rel="stylesheet" href="assets/style.css?v=20260719b" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -219,11 +219,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260719a"></script>
-<script src="assets/auth.js?v=20260719a"></script>
-<script src="assets/helpers.js?v=20260719a"></script>
-<script src="assets/data.js?v=20260719a"></script>
-<script src="assets/export.js?v=20260719a"></script>
+<script src="assets/config.js?v=20260719b"></script>
+<script src="assets/auth.js?v=20260719b"></script>
+<script src="assets/helpers.js?v=20260719b"></script>
+<script src="assets/data.js?v=20260719b"></script>
+<script src="assets/export.js?v=20260719b"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
@@ -467,8 +467,8 @@
     const aOrder = a.sort_order ?? idx;
     const bOrder = b.sort_order ?? swapIdx;
     try {
-      await upsertItem(currentDomain, { id: a.id, sort_order: bOrder });
-      await upsertItem(currentDomain, { id: b.id, sort_order: aOrder });
+      await updateItem(currentDomain, a.id, { sort_order: bOrder });
+      await updateItem(currentDomain, b.id, { sort_order: aOrder });
       await refreshTable();
     } catch (err) {
       toast("Erreur : " + err.message, "error");
