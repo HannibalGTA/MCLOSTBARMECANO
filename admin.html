@@ -541,6 +541,7 @@
       }
 
       if (editingId) payload.id = editingId;
+      else payload.sort_order = 9999; // place les nouveaux articles en fin de liste par défaut
 
       await upsertItem(currentDomain, payload);
       toast(editingId ? "Article mis à jour." : "Article créé.", "success");
@@ -659,11 +660,11 @@
     if (swapIdx < 0 || swapIdx >= items.length) return;
     const a = items[idx];
     const b = items[swapIdx];
-    const aOrder = a.sort_order ?? idx;
-    const bOrder = b.sort_order ?? swapIdx;
+    // Comme pour les catégories : on assigne directement les positions d'affichage
+    // plutôt que d'échanger d'anciennes valeurs qui peuvent être identiques (0 par défaut).
     try {
-      await updateItem(currentDomain, a.id, { sort_order: bOrder });
-      await updateItem(currentDomain, b.id, { sort_order: aOrder });
+      await updateItem(currentDomain, a.id, { sort_order: swapIdx });
+      await updateItem(currentDomain, b.id, { sort_order: idx });
       await refreshTable();
     } catch (err) {
       toast("Erreur : " + err.message, "error");
@@ -748,6 +749,7 @@
 
     const payload = { name, type };
     if (categoryEditingId) payload.id = categoryEditingId;
+    else payload.sort_order = 9999; // place les nouvelles catégories en fin de liste par défaut
 
     try {
       await upsertMecanoCategory(payload);
@@ -832,11 +834,14 @@
     if (swapIdx < 0 || swapIdx >= mecanoCategories.length) return;
     const a = mecanoCategories[idx];
     const b = mecanoCategories[swapIdx];
-    const aOrder = a.sort_order ?? idx;
-    const bOrder = b.sort_order ?? swapIdx;
+    // On assigne directement les positions d'affichage (idx/swapIdx) plutôt que de
+    // ré-échanger les valeurs stockées : si plusieurs catégories partagent encore la
+    // même valeur par défaut (0), un simple échange de valeurs identiques ne change
+    // rien. Cette méthode garantit toujours un vrai changement visible, et "répare"
+    // au passage l'ordre au fur et à mesure des clics.
     try {
-      await updateMecanoCategory(a.id, { sort_order: bOrder });
-      await updateMecanoCategory(b.id, { sort_order: aOrder });
+      await updateMecanoCategory(a.id, { sort_order: swapIdx });
+      await updateMecanoCategory(b.id, { sort_order: idx });
       await loadMecanoCategories();
       await refreshCategoriesTable();
       await refreshTable();
