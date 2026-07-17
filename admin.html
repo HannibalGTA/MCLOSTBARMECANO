@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Administration — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260719b" />
+<link rel="stylesheet" href="assets/style.css?v=20260720a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -21,11 +21,42 @@
       <h1>Administration</h1>
     </div>
   </div>
-  <p class="muted">Crée et gère les articles vendus au bar et au garage : prix d'achat, prix de vente, stock et image.</p>
+  <p class="muted">Crée et gère les articles vendus au bar et au garage : prix d'achat, prix de vente, stock, et pour le Bar, une image.</p>
 
   <div class="role-grid" style="grid-template-columns: 1fr 1fr; max-width:360px; margin-bottom:20px;">
     <button class="role-btn selected" id="tab-bar" data-domain="bar">Articles Bar</button>
     <button class="role-btn" id="tab-mecano" data-domain="mecano">Articles Mécano</button>
+  </div>
+
+  <div class="card" id="mecano-categories-card" style="display:none;">
+    <div class="card-title"><h2>Catégories Mécano</h2></div>
+    <p class="muted" style="margin-top:-6px;">Une catégorie "prestation" force ses articles en "sans stock" (ex : main d'œuvre, vidange). Une catégorie "stockable" suit le stock et le prix d'achat.</p>
+    <form id="category-form">
+      <input type="hidden" id="category-id" />
+      <div class="field-row" style="align-items:flex-end;">
+        <div>
+          <label for="category-name">Nom de la catégorie</label>
+          <input type="text" id="category-name" placeholder="Ex : Pièces moteur" required />
+        </div>
+        <div>
+          <label for="category-type">Type</label>
+          <select id="category-type">
+            <option value="stockable">Stockable</option>
+            <option value="prestation">Prestation</option>
+          </select>
+        </div>
+        <div>
+          <button type="button" class="btn-ghost" id="category-cancel-edit" style="display:none;margin-bottom:14px;">Annuler</button>
+          <button type="submit" class="btn-secondary" style="margin-bottom:14px;">Enregistrer</button>
+        </div>
+      </div>
+      <div class="login-error" id="category-form-error"></div>
+    </form>
+    <table>
+      <thead><tr><th>Nom</th><th>Type</th><th></th></tr></thead>
+      <tbody id="categories-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="categories-empty" style="display:none;">Aucune catégorie créée pour le Mécano.</div>
   </div>
 
   <div class="card">
@@ -42,27 +73,41 @@
         <label for="item-name">Nom de l'article</label>
         <input type="text" id="item-name" placeholder="Ex : Bière pression" required />
 
-        <div class="field-row">
-          <div>
-            <label for="item-buy">Prix d'achat ($)</label>
-            <input type="number" id="item-buy" min="0" step="1" inputmode="numeric" required />
-          </div>
-          <div>
-            <label for="item-sell">Prix de vente ($)</label>
-            <input type="number" id="item-sell" min="0" step="1" inputmode="numeric" required />
-          </div>
+        <div id="item-category-field" style="display:none;">
+          <label for="item-category">Catégorie</label>
+          <select id="item-category"></select>
         </div>
 
-        <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:0.85rem;margin-bottom:14px;">
-          <input type="checkbox" id="item-track-stock" style="width:auto;margin:0;" checked /> Suivre le stock (décoche pour une prestation sans stock, ex : vidange, main d'œuvre)
-        </label>
+        <div id="item-buy-stock-fields">
+          <div class="field-row">
+            <div>
+              <label for="item-buy">Prix d'achat ($)</label>
+              <input type="number" id="item-buy" min="0" step="1" inputmode="numeric" required />
+            </div>
+            <div>
+              <label for="item-sell">Prix de vente ($)</label>
+              <input type="number" id="item-sell" min="0" step="1" inputmode="numeric" required />
+            </div>
+          </div>
 
-        <label for="item-stock" id="item-stock-label">Stock actuel</label>
-        <input type="number" id="item-stock" min="0" step="1" required />
+          <label id="item-track-stock-row" style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:0.85rem;margin-bottom:14px;">
+            <input type="checkbox" id="item-track-stock" style="width:auto;margin:0;" checked /> Suivre le stock (décoche pour une prestation sans stock, ex : vidange, main d'œuvre)
+          </label>
 
-        <label for="item-image">Image (PNG, redimensionnée automatiquement)</label>
-        <input type="file" id="item-image" accept="image/png,image/jpeg" />
-        <div id="image-preview-box" class="item-img-box" style="width:120px;height:120px;margin-bottom:14px;"></div>
+          <label for="item-stock" id="item-stock-label">Stock actuel</label>
+          <input type="number" id="item-stock" min="0" step="1" required />
+        </div>
+
+        <div id="item-sell-only-field" style="display:none;">
+          <label for="item-sell-only">Prix de vente ($)</label>
+          <input type="number" id="item-sell-only" min="0" step="1" inputmode="numeric" />
+        </div>
+
+        <div id="item-image-field">
+          <label for="item-image">Image (PNG, redimensionnée automatiquement)</label>
+          <input type="file" id="item-image" accept="image/png,image/jpeg" />
+          <div id="image-preview-box" class="item-img-box" style="width:120px;height:120px;margin-bottom:14px;"></div>
+        </div>
 
         <div class="flex-between">
           <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:0.85rem;">
@@ -82,7 +127,7 @@
       <div class="card-title"><h2>Catalogue — <span id="catalog-domain-label">Bar</span></h2></div>
       <div id="items-table-wrap">
         <table>
-          <thead>
+          <thead id="items-thead">
             <tr><th></th><th></th><th>Nom</th><th class="num">Achat</th><th class="num">Vente</th><th class="num">Stock</th><th></th></tr>
           </thead>
           <tbody id="items-tbody"></tbody>
@@ -219,16 +264,17 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260719b"></script>
-<script src="assets/auth.js?v=20260719b"></script>
-<script src="assets/helpers.js?v=20260719b"></script>
-<script src="assets/data.js?v=20260719b"></script>
-<script src="assets/export.js?v=20260719b"></script>
+<script src="assets/config.js?v=20260720a"></script>
+<script src="assets/auth.js?v=20260720a"></script>
+<script src="assets/helpers.js?v=20260720a"></script>
+<script src="assets/data.js?v=20260720a"></script>
+<script src="assets/export.js?v=20260720a"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
   let editingId = null;
   let currentProfile = null;
+  let mecanoCategories = [];
 
   async function init() {
     currentProfile = await requireRole(["gestionnaire"]);
@@ -318,16 +364,72 @@
   document.getElementById("tab-bar").addEventListener("click", () => switchDomain("bar"));
   document.getElementById("tab-mecano").addEventListener("click", () => switchDomain("mecano"));
 
-  function switchDomain(domain) {
+  async function switchDomain(domain) {
     currentDomain = domain;
     document.getElementById("tab-bar").classList.toggle("selected", domain === "bar");
     document.getElementById("tab-mecano").classList.toggle("selected", domain === "mecano");
     document.getElementById("catalog-domain-label").textContent = domain === "bar" ? "Bar" : "Mécano";
-    document.getElementById("form-title").textContent = "Nouvel article — " + (domain === "bar" ? "Bar" : "Mécano");
     document.body.className = domain === "bar" ? "theme-bar" : "theme-mecano";
     document.getElementById("page-logo").src = domain === "bar" ? "assets/MCbar.png" : "assets/MCmecano.png";
+    document.getElementById("mecano-categories-card").style.display = domain === "mecano" ? "block" : "none";
+
+    if (domain === "mecano") {
+      await loadMecanoCategories();
+      await refreshCategoriesTable();
+    }
+
     resetForm();
-    refreshTable();
+    await refreshTable();
+  }
+
+  // ---------- FORMULAIRE ARTICLE : affichage conditionnel selon domaine/catégorie ----------
+  async function loadMecanoCategories() {
+    mecanoCategories = await listMecanoCategories();
+    const select = document.getElementById("item-category");
+    select.innerHTML =
+      '<option value="">— Choisir une catégorie —</option>' +
+      mecanoCategories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)} (${c.type === "prestation" ? "Prestation" : "Stockable"})</option>`).join("");
+  }
+
+  document.getElementById("item-category").addEventListener("change", applyItemCategoryUI);
+
+  function applyDomainFormUI() {
+    const isMecano = currentDomain === "mecano";
+    document.getElementById("item-category-field").style.display = isMecano ? "block" : "none";
+    document.getElementById("item-image-field").style.display = isMecano ? "none" : "block";
+    if (isMecano) {
+      applyItemCategoryUI();
+    } else {
+      document.getElementById("item-buy-stock-fields").style.display = "block";
+      document.getElementById("item-sell-only-field").style.display = "none";
+      document.getElementById("item-track-stock-row").style.display = "flex";
+      document.getElementById("item-buy").required = true;
+      document.getElementById("item-sell").required = true;
+      document.getElementById("item-sell-only").required = false;
+    }
+  }
+
+  function applyItemCategoryUI() {
+    if (currentDomain !== "mecano") return;
+    const catId = document.getElementById("item-category").value;
+    const cat = mecanoCategories.find((c) => c.id === catId);
+    const isPrestation = cat && cat.type === "prestation";
+
+    document.getElementById("item-track-stock-row").style.display = "none"; // toujours dérivé de la catégorie pour le mécano
+
+    if (isPrestation) {
+      document.getElementById("item-buy-stock-fields").style.display = "none";
+      document.getElementById("item-sell-only-field").style.display = "block";
+      document.getElementById("item-buy").required = false;
+      document.getElementById("item-sell").required = false;
+      document.getElementById("item-sell-only").required = true;
+    } else {
+      document.getElementById("item-buy-stock-fields").style.display = "block";
+      document.getElementById("item-sell-only-field").style.display = "none";
+      document.getElementById("item-buy").required = true;
+      document.getElementById("item-sell").required = true;
+      document.getElementById("item-sell-only").required = false;
+    }
   }
 
   function resetForm() {
@@ -337,11 +439,12 @@
     document.getElementById("item-id").value = "";
     document.getElementById("item-active").checked = true;
     document.getElementById("item-track-stock").checked = true;
-    applyTrackStockUI(true);
     document.getElementById("image-preview-box").innerHTML = "";
     document.getElementById("cancel-edit").style.display = "none";
     document.getElementById("form-error").textContent = "";
     document.getElementById("form-title").textContent = "Nouvel article — " + (currentDomain === "bar" ? "Bar" : "Mécano");
+    applyDomainFormUI();
+    if (currentDomain === "bar") applyTrackStockUI(true);
   }
 
   document.getElementById("cancel-edit").addEventListener("click", resetForm);
@@ -383,27 +486,50 @@
     errorEl.textContent = "";
 
     const name = document.getElementById("item-name").value.trim();
-    const buy = Math.round(parseFloat(document.getElementById("item-buy").value));
-    const sell = Math.round(parseFloat(document.getElementById("item-sell").value));
-    const trackStock = document.getElementById("item-track-stock").checked;
-    const stock = trackStock ? parseInt(document.getElementById("item-stock").value, 10) : 0;
     const active = document.getElementById("item-active").checked;
+    let payload = { name, active };
 
-    if (sell < buy) {
-      errorEl.textContent = "Le prix de vente ne peut pas être inférieur au prix d'achat.";
-      return;
+    if (currentDomain === "bar") {
+      const buy = Math.round(parseFloat(document.getElementById("item-buy").value));
+      const sell = Math.round(parseFloat(document.getElementById("item-sell").value));
+      const trackStock = document.getElementById("item-track-stock").checked;
+      const stock = trackStock ? parseInt(document.getElementById("item-stock").value, 10) : 0;
+
+      if (sell < buy) {
+        errorEl.textContent = "Le prix de vente ne peut pas être inférieur au prix d'achat.";
+        return;
+      }
+      payload = { ...payload, buy_price: buy, sell_price: sell, stock, track_stock: trackStock };
+      if (currentImageDataUrl) payload.image_data = currentImageDataUrl;
+    } else {
+      const categoryId = document.getElementById("item-category").value;
+      if (!categoryId) {
+        errorEl.textContent = "Choisis une catégorie.";
+        return;
+      }
+      const cat = mecanoCategories.find((c) => c.id === categoryId);
+      const isPrestation = cat && cat.type === "prestation";
+
+      if (isPrestation) {
+        const sell = Math.round(parseFloat(document.getElementById("item-sell-only").value));
+        if (isNaN(sell) || sell < 0) {
+          errorEl.textContent = "Indique un prix de vente valide.";
+          return;
+        }
+        payload = { ...payload, category_id: categoryId, buy_price: 0, sell_price: sell, stock: 0, track_stock: false };
+      } else {
+        const buy = Math.round(parseFloat(document.getElementById("item-buy").value));
+        const sell = Math.round(parseFloat(document.getElementById("item-sell").value));
+        const stock = parseInt(document.getElementById("item-stock").value, 10) || 0;
+        if (sell < buy) {
+          errorEl.textContent = "Le prix de vente ne peut pas être inférieur au prix d'achat.";
+          return;
+        }
+        payload = { ...payload, category_id: categoryId, buy_price: buy, sell_price: sell, stock, track_stock: true };
+      }
     }
 
-    const payload = {
-      name,
-      buy_price: buy,
-      sell_price: sell,
-      stock,
-      track_stock: trackStock,
-      active,
-    };
     if (editingId) payload.id = editingId;
-    if (currentImageDataUrl) payload.image_data = currentImageDataUrl;
 
     try {
       await upsertItem(currentDomain, payload);
@@ -415,35 +541,93 @@
     }
   });
 
+  // ---------- CATALOGUE ----------
   async function refreshTable() {
-    const items = await listItems(currentDomain);
     const tbody = document.getElementById("items-tbody");
     const empty = document.getElementById("items-empty");
-    tbody.innerHTML = "";
-    empty.style.display = items.length ? "none" : "block";
+    const thead = document.getElementById("items-thead");
 
-    for (const [idx, item] of items.entries()) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>
-          <div style="display:flex;flex-direction:column;gap:2px;">
-            <button class="btn-ghost btn-sm" data-action="move-up" data-id="${item.id}" ${idx === 0 ? "disabled" : ""} title="Monter">▲</button>
-            <button class="btn-ghost btn-sm" data-action="move-down" data-id="${item.id}" ${idx === items.length - 1 ? "disabled" : ""} title="Descendre">▼</button>
-          </div>
-        </td>
-        <td>${item.image_data ? `<div class="item-img-box" style="width:36px;height:36px;"><img src="${item.image_data}" /></div>` : ""}</td>
-        <td>${escapeHtml(item.name)} ${!item.active ? '<span class="badge muted" style="border:1px solid #444;">inactif</span>' : ""}</td>
-        <td class="num">${formatUSD(item.buy_price)}</td>
-        <td class="num">${formatUSD(item.sell_price)}</td>
-        <td class="num">${item.track_stock ? item.stock : '<span class="muted">Illimité</span>'}</td>
-        <td>
-          <button class="btn-ghost btn-sm" data-action="edit" data-id="${item.id}">Modifier</button>
-          <button class="btn-danger btn-sm" data-action="delete" data-id="${item.id}">Supprimer</button>
-        </td>
-      `;
-      tbody.appendChild(tr);
+    if (currentDomain === "bar") {
+      thead.innerHTML = `<tr><th></th><th></th><th>Nom</th><th class="num">Achat</th><th class="num">Vente</th><th class="num">Stock</th><th></th></tr>`;
+      const items = await listItems("bar");
+      tbody.innerHTML = "";
+      empty.style.display = items.length ? "none" : "block";
+
+      for (const [idx, item] of items.entries()) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <button class="btn-ghost btn-sm" data-action="move-up" data-id="${item.id}" ${idx === 0 ? "disabled" : ""} title="Monter">▲</button>
+              <button class="btn-ghost btn-sm" data-action="move-down" data-id="${item.id}" ${idx === items.length - 1 ? "disabled" : ""} title="Descendre">▼</button>
+            </div>
+          </td>
+          <td>${item.image_data ? `<div class="item-img-box" style="width:36px;height:36px;"><img src="${item.image_data}" /></div>` : ""}</td>
+          <td>${escapeHtml(item.name)} ${!item.active ? '<span class="badge muted" style="border:1px solid #444;">inactif</span>' : ""}</td>
+          <td class="num">${formatUSD(item.buy_price)}</td>
+          <td class="num">${formatUSD(item.sell_price)}</td>
+          <td class="num">${item.track_stock ? item.stock : '<span class="muted">Illimité</span>'}</td>
+          <td>
+            <button class="btn-ghost btn-sm" data-action="edit" data-id="${item.id}">Modifier</button>
+            <button class="btn-danger btn-sm" data-action="delete" data-id="${item.id}">Supprimer</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+      wireItemRowActions(tbody, items);
+    } else {
+      thead.innerHTML = `<tr><th></th><th>Nom</th><th>Catégorie</th><th class="num">Achat</th><th class="num">Vente</th><th class="num">Stock</th><th></th></tr>`;
+      const items = await listMecanoItemsWithCategory();
+      tbody.innerHTML = "";
+      empty.style.display = items.length ? "none" : "block";
+
+      const categoryOptions = mecanoCategories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+
+      for (const [idx, item] of items.entries()) {
+        const isPrestation = item.category && item.category.type === "prestation";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <button class="btn-ghost btn-sm" data-action="move-up" data-id="${item.id}" ${idx === 0 ? "disabled" : ""} title="Monter">▲</button>
+              <button class="btn-ghost btn-sm" data-action="move-down" data-id="${item.id}" ${idx === items.length - 1 ? "disabled" : ""} title="Descendre">▼</button>
+            </div>
+          </td>
+          <td>${escapeHtml(item.name)} ${!item.active ? '<span class="badge muted" style="border:1px solid #444;">inactif</span>' : ""}</td>
+          <td>
+            <select data-action="change-category" data-id="${item.id}" style="margin-bottom:0;">
+              <option value="">— Aucune —</option>
+              ${categoryOptions}
+            </select>
+          </td>
+          <td class="num">${isPrestation ? '<span class="muted">—</span>' : formatUSD(item.buy_price)}</td>
+          <td class="num">${formatUSD(item.sell_price)}</td>
+          <td class="num">${isPrestation ? '<span class="muted">—</span>' : item.stock}</td>
+          <td>
+            <button class="btn-ghost btn-sm" data-action="edit" data-id="${item.id}">Modifier</button>
+            <button class="btn-danger btn-sm" data-action="delete" data-id="${item.id}">Supprimer</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+        tr.querySelector('[data-action="change-category"]').value = item.category_id || "";
+      }
+
+      tbody.querySelectorAll('[data-action="change-category"]').forEach((sel) => {
+        sel.addEventListener("change", async () => {
+          try {
+            await updateItem("mecano", sel.dataset.id, { category_id: sel.value || null });
+            toast("Catégorie mise à jour.", "success");
+            await refreshTable();
+          } catch (err) {
+            toast("Erreur : " + err.message, "error");
+          }
+        });
+      });
+      wireItemRowActions(tbody, items);
     }
+  }
 
+  function wireItemRowActions(tbody, items) {
     tbody.querySelectorAll('[data-action="move-up"]').forEach((btn) => {
       btn.addEventListener("click", () => moveItem(btn.dataset.id, -1, items));
     });
@@ -482,16 +666,33 @@
     document.getElementById("form-title").textContent = "Modifier — " + item.name;
     document.getElementById("item-id").value = id;
     document.getElementById("item-name").value = item.name;
-    document.getElementById("item-buy").value = item.buy_price;
-    document.getElementById("item-sell").value = item.sell_price;
-    document.getElementById("item-stock").value = item.stock;
-    document.getElementById("item-track-stock").checked = item.track_stock;
-    applyTrackStockUI(item.track_stock);
     document.getElementById("item-active").checked = item.active;
-    currentImageDataUrl = item.image_data || null;
-    document.getElementById("image-preview-box").innerHTML = item.image_data
-      ? `<img src="${item.image_data}" style="max-width:100%;max-height:100%;object-fit:contain;" />`
-      : "";
+
+    if (currentDomain === "bar") {
+      document.getElementById("item-buy").value = item.buy_price;
+      document.getElementById("item-sell").value = item.sell_price;
+      document.getElementById("item-stock").value = item.stock;
+      document.getElementById("item-track-stock").checked = item.track_stock;
+      applyTrackStockUI(item.track_stock);
+      currentImageDataUrl = item.image_data || null;
+      document.getElementById("image-preview-box").innerHTML = item.image_data
+        ? `<img src="${item.image_data}" style="max-width:100%;max-height:100%;object-fit:contain;" />`
+        : "";
+    } else {
+      document.getElementById("item-category").value = item.category_id || "";
+      applyItemCategoryUI();
+      const isPrestation = item.category && item.category.type === "prestation";
+      if (isPrestation) {
+        document.getElementById("item-sell-only").value = item.sell_price;
+      } else {
+        document.getElementById("item-buy").value = item.buy_price;
+        document.getElementById("item-sell").value = item.sell_price;
+        document.getElementById("item-stock").value = item.stock;
+      }
+    }
+
+    applyDomainFormUI();
+
     document.getElementById("cancel-edit").style.display = "inline-block";
     document.getElementById("form-title").scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -505,6 +706,97 @@
     } catch (err) {
       toast("Erreur : " + err.message, "error");
     }
+  }
+
+  // ---------- CATÉGORIES MÉCANO ----------
+  let categoryEditingId = null;
+
+  document.getElementById("category-cancel-edit").addEventListener("click", resetCategoryForm);
+
+  function resetCategoryForm() {
+    categoryEditingId = null;
+    document.getElementById("category-form").reset();
+    document.getElementById("category-id").value = "";
+    document.getElementById("category-cancel-edit").style.display = "none";
+    document.getElementById("category-form-error").textContent = "";
+  }
+
+  document.getElementById("category-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById("category-form-error");
+    errorEl.textContent = "";
+
+    const name = document.getElementById("category-name").value.trim();
+    const type = document.getElementById("category-type").value;
+    if (!name) {
+      errorEl.textContent = "Indique un nom de catégorie.";
+      return;
+    }
+
+    const payload = { name, type };
+    if (categoryEditingId) payload.id = categoryEditingId;
+
+    try {
+      await upsertMecanoCategory(payload);
+      toast(categoryEditingId ? "Catégorie mise à jour." : "Catégorie créée.", "success");
+      resetCategoryForm();
+      await loadMecanoCategories();
+      await refreshCategoriesTable();
+      await refreshTable();
+    } catch (err) {
+      errorEl.textContent = "Erreur : " + err.message + (err.message.includes("duplicate") ? " (ce nom existe déjà)" : "");
+    }
+  });
+
+  async function refreshCategoriesTable() {
+    const tbody = document.getElementById("categories-tbody");
+    const empty = document.getElementById("categories-empty");
+    tbody.innerHTML = "";
+    empty.style.display = mecanoCategories.length ? "none" : "block";
+
+    for (const cat of mecanoCategories) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(cat.name)}</td>
+        <td>${cat.type === "prestation" ? "Prestation" : "Stockable"}</td>
+        <td>
+          <button class="btn-ghost btn-sm" data-action="edit-cat" data-id="${cat.id}">Modifier</button>
+          <button class="btn-danger btn-sm" data-action="delete-cat" data-id="${cat.id}">Supprimer</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    tbody.querySelectorAll('[data-action="edit-cat"]').forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const cat = mecanoCategories.find((c) => c.id === btn.dataset.id);
+        if (!cat) return;
+        categoryEditingId = cat.id;
+        document.getElementById("category-id").value = cat.id;
+        document.getElementById("category-name").value = cat.name;
+        document.getElementById("category-type").value = cat.type;
+        document.getElementById("category-cancel-edit").style.display = "inline-block";
+        document.getElementById("category-name").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+    tbody.querySelectorAll('[data-action="delete-cat"]').forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const confirmed = await confirmDialog(
+          "Supprimer la catégorie",
+          "Supprimer cette catégorie ? Les articles déjà liés repasseront en \"sans catégorie\" (ils ne seront pas supprimés)."
+        );
+        if (!confirmed) return;
+        try {
+          await deleteMecanoCategory(btn.dataset.id);
+          toast("Catégorie supprimée.", "success");
+          await loadMecanoCategories();
+          await refreshCategoriesTable();
+          await refreshTable();
+        } catch (err) {
+          toast("Erreur : " + err.message, "error");
+        }
+      });
+    });
   }
 
   // ---------- EMPLOYÉS ----------
