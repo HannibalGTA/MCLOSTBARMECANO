@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Salaires — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260719a" />
+<link rel="stylesheet" href="assets/style.css?v=20260719c" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="theme-bar">
@@ -96,10 +96,10 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260719a"></script>
-<script src="assets/auth.js?v=20260719a"></script>
-<script src="assets/helpers.js?v=20260719a"></script>
-<script src="assets/data.js?v=20260719a"></script>
+<script src="assets/config.js?v=20260719c"></script>
+<script src="assets/auth.js?v=20260719c"></script>
+<script src="assets/helpers.js?v=20260719c"></script>
+<script src="assets/data.js?v=20260719c"></script>
 <script>
   const DEFAULT_PERCENTAGE = 60;
 
@@ -129,11 +129,9 @@
     return aStart <= bEnd && bStart <= aEnd;
   }
 
-  /** Marge déjà couverte par des versements sur une période qui chevauche celle sélectionnée. */
-  function alreadyCoveredMargin(key) {
-    return (existingPaymentsBySeller[key] || [])
-      .filter((p) => periodsOverlap(currentFrom, currentTo, p.period_from, p.period_to))
-      .reduce((s, p) => s + Number(p.margin_amount), 0);
+  /** Montant ($) déjà versé sur une période qui chevauche celle sélectionnée. */
+  function alreadyPaidAmount(key) {
+    return overlappingPayments(key).reduce((s, p) => s + Number(p.amount), 0);
   }
   function overlappingPayments(key) {
     return (existingPaymentsBySeller[key] || []).filter((p) => periodsOverlap(currentFrom, currentTo, p.period_from, p.period_to));
@@ -249,9 +247,9 @@
       const seller = displayNameByKey[key];
       const grossMargin = marginsBySeller[key] || 0;
       const pct = percentagesBySeller[key] !== undefined ? percentagesBySeller[key] : DEFAULT_PERCENTAGE;
-      const alreadyPaidMargin = alreadyCoveredMargin(key);
-      const remainingMargin = Math.max(0, grossMargin - alreadyPaidMargin);
-      const salary = Math.round((remainingMargin * pct) / 100);
+      const alreadyPaid = alreadyPaidAmount(key);
+      const targetAtPct = Math.round((grossMargin * pct) / 100);
+      const salary = Math.max(0, targetAtPct - alreadyPaid);
       const overlapping = overlappingPayments(key);
 
       const tr = document.createElement("tr");
@@ -269,14 +267,14 @@
         const details = overlapping
           .map((p) => {
             const period = p.period_from || p.period_to ? `du ${p.period_from ? formatDate(p.period_from) : "…"} au ${p.period_to ? formatDate(p.period_to) : "…"}` : "sur toute la période";
-            return `${formatUSD(p.amount)} (marge de ${formatUSD(p.margin_amount)}) versé le ${formatDateTime(p.paid_at)} (${period})`;
+            return `${formatUSD(p.amount)} (à ${p.percentage}%) versé le ${formatDateTime(p.paid_at)} (${period})`;
           })
           .join(" · ");
         const infoTr = document.createElement("tr");
         infoTr.innerHTML = `
           <td colspan="6" style="padding-top:0;padding-bottom:12px;">
             <div style="font-size:0.8rem;color:var(--brass);background:rgba(201,154,61,0.1);border:1px solid var(--brass);border-radius:4px;padding:6px 10px;">
-              ℹ️ Déjà versé à ${escapeHtml(seller)} sur une période chevauchante : ${details}. Le solde restant ci-dessus en tient déjà compte automatiquement.
+              ℹ️ Déjà versé à ${escapeHtml(seller)} sur une période chevauchante : ${details}. Le solde ci-dessus tient déjà compte de ce qui a été versé au % actuel (${pct}%) — augmente le % pour débloquer un complément.
             </div>
           </td>
         `;
@@ -289,8 +287,8 @@
         const key = input.dataset.pctInput;
         const pct = Math.max(0, Math.min(100, Math.round(parseFloat(input.value)) || 0));
         const grossMargin = marginsBySeller[key] || 0;
-        const remainingMargin = Math.max(0, grossMargin - alreadyCoveredMargin(key));
-        const salary = Math.round((remainingMargin * pct) / 100);
+        const targetAtPct = Math.round((grossMargin * pct) / 100);
+        const salary = Math.max(0, targetAtPct - alreadyPaidAmount(key));
         const cell = tbody.querySelector(`[data-salary-cell="${cssEscape(key)}"]`);
         if (cell) cell.textContent = formatUSD(salary);
         const payBtn = tbody.querySelector(`[data-action="pay"][data-key="${cssEscape(key)}"]`);
@@ -327,16 +325,16 @@
   async function paySalary(key, displayName) {
     const grossMargin = marginsBySeller[key] || 0;
     const pct = percentagesBySeller[key] !== undefined ? percentagesBySeller[key] : DEFAULT_PERCENTAGE;
-    const alreadyPaidMargin = alreadyCoveredMargin(key);
-    const remainingMargin = Math.max(0, grossMargin - alreadyPaidMargin);
-    const salary = Math.round((remainingMargin * pct) / 100);
+    const alreadyPaid = alreadyPaidAmount(key);
+    const targetAtPct = Math.round((grossMargin * pct) / 100);
+    const salary = Math.max(0, targetAtPct - alreadyPaid);
     if (salary <= 0) return;
 
     const domainLabel = currentDomain === "bar" ? "Bar" : "Mécano";
     const fromLabel = currentFrom ? formatDate(currentFrom) : "le début";
     const toLabel = currentTo ? formatDate(currentTo) : "aujourd'hui";
 
-    const infoLine = alreadyPaidMargin > 0 ? ` (le solde déjà versé sur cette période a été déduit automatiquement)` : "";
+    const infoLine = alreadyPaid > 0 ? ` (ce qui a déjà été versé sur cette période a été déduit automatiquement)` : "";
 
     const confirmed = await confirmDialog(
       "Confirmer le versement",
@@ -371,7 +369,7 @@
         domain: currentDomain,
         period_from: currentFrom,
         period_to: currentTo,
-        margin_amount: Math.round(remainingMargin),
+        margin_amount: Math.round(grossMargin),
         percentage: pct,
         amount: salary,
         purchase_id: purchase.id,
