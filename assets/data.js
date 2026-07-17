@@ -268,3 +268,33 @@ async function deleteBonusPayment(id) {
   const { error } = await supabaseClient.from("bonus_payments").delete().eq("id", id);
   if (error) throw error;
 }
+
+// ---------- CATÉGORIES MÉCANO ----------
+async function listMecanoCategories() {
+  const { data, error } = await supabaseClient.from("mecano_categories").select("*").order("sort_order").order("name");
+  if (error) throw error;
+  return data;
+}
+
+async function upsertMecanoCategory(category) {
+  const { data, error } = await supabaseClient.from("mecano_categories").upsert(category).select();
+  if (error) throw error;
+  return data[0];
+}
+
+async function deleteMecanoCategory(id) {
+  const { error } = await supabaseClient.from("mecano_categories").delete().eq("id", id);
+  if (error) throw error;
+}
+
+async function listMecanoItemsWithCategory({ onlyActive = false } = {}) {
+  let q = supabaseClient
+    .from("mecano_items")
+    .select("*, category:mecano_categories(id, name, type)")
+    .order("sort_order")
+    .order("name");
+  if (onlyActive) q = q.eq("active", true);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
