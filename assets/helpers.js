@@ -264,7 +264,7 @@ function viewFileInNewTab(dataUrl, mimeType, fileName) {
   win.document.close();
 }
 
-// Palette fixe de 10 couleurs proposées pour les catégories Mécano
+// Palette fixe de 20 couleurs proposées pour les catégories Mécano
 const CATEGORY_COLOR_PALETTE = [
   "#e5484d", // rouge
   "#f2994a", // orange
@@ -276,6 +276,16 @@ const CATEGORY_COLOR_PALETTE = [
   "#9b59b6", // violet
   "#e0559a", // rose
   "#8a8d93", // gris
+  "#d32f2f", // rouge foncé
+  "#ff7043", // orange foncé
+  "#cddc39", // citron vert
+  "#2e7d32", // vert foncé
+  "#00bcd4", // cyan
+  "#1565c0", // bleu foncé
+  "#7e57c2", // violet foncé
+  "#ad1457", // magenta
+  "#795548", // marron
+  "#607d8b", // bleu-gris
 ];
 
 function hexToRgba(hex, alpha) {
