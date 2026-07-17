@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Administration — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260720c" />
+<link rel="stylesheet" href="assets/style.css?v=20260720d" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -268,11 +268,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260720c"></script>
-<script src="assets/auth.js?v=20260720c"></script>
-<script src="assets/helpers.js?v=20260720c"></script>
-<script src="assets/data.js?v=20260720c"></script>
-<script src="assets/export.js?v=20260720c"></script>
+<script src="assets/config.js?v=20260720d"></script>
+<script src="assets/auth.js?v=20260720d"></script>
+<script src="assets/helpers.js?v=20260720d"></script>
+<script src="assets/data.js?v=20260720d"></script>
+<script src="assets/export.js?v=20260720d"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
@@ -428,12 +428,14 @@
       document.getElementById("item-sell-only-field").style.display = "block";
       document.getElementById("item-buy").required = false;
       document.getElementById("item-sell").required = false;
+      document.getElementById("item-stock").required = false;
       document.getElementById("item-sell-only").required = true;
     } else {
       document.getElementById("item-buy-stock-fields").style.display = "block";
       document.getElementById("item-sell-only-field").style.display = "none";
       document.getElementById("item-buy").required = true;
       document.getElementById("item-sell").required = true;
+      document.getElementById("item-stock").required = true;
       document.getElementById("item-sell-only").required = false;
     }
   }
@@ -491,59 +493,60 @@
     const errorEl = document.getElementById("form-error");
     errorEl.textContent = "";
 
-    const name = document.getElementById("item-name").value.trim();
-    const active = document.getElementById("item-active").checked;
-    let payload = { name, active };
+    try {
+      const name = document.getElementById("item-name").value.trim();
+      const active = document.getElementById("item-active").checked;
+      let payload = { name, active };
 
-    if (currentDomain === "bar") {
-      const buy = Math.round(parseFloat(document.getElementById("item-buy").value));
-      const sell = Math.round(parseFloat(document.getElementById("item-sell").value));
-      const trackStock = document.getElementById("item-track-stock").checked;
-      const stock = trackStock ? parseInt(document.getElementById("item-stock").value, 10) : 0;
-
-      if (sell < buy) {
-        errorEl.textContent = "Le prix de vente ne peut pas être inférieur au prix d'achat.";
-        return;
-      }
-      payload = { ...payload, buy_price: buy, sell_price: sell, stock, track_stock: trackStock };
-      if (currentImageDataUrl) payload.image_data = currentImageDataUrl;
-    } else {
-      const categoryId = document.getElementById("item-category").value;
-      if (!categoryId) {
-        errorEl.textContent = "Choisis une catégorie.";
-        return;
-      }
-      const cat = mecanoCategories.find((c) => c.id === categoryId);
-      const isPrestation = cat && cat.type === "prestation";
-
-      if (isPrestation) {
-        const sell = Math.round(parseFloat(document.getElementById("item-sell-only").value));
-        if (isNaN(sell) || sell < 0) {
-          errorEl.textContent = "Indique un prix de vente valide.";
-          return;
-        }
-        payload = { ...payload, category_id: categoryId, buy_price: 0, sell_price: sell, stock: 0, track_stock: false };
-      } else {
+      if (currentDomain === "bar") {
         const buy = Math.round(parseFloat(document.getElementById("item-buy").value));
         const sell = Math.round(parseFloat(document.getElementById("item-sell").value));
-        const stock = parseInt(document.getElementById("item-stock").value, 10) || 0;
+        const trackStock = document.getElementById("item-track-stock").checked;
+        const stock = trackStock ? parseInt(document.getElementById("item-stock").value, 10) : 0;
+
         if (sell < buy) {
           errorEl.textContent = "Le prix de vente ne peut pas être inférieur au prix d'achat.";
           return;
         }
-        payload = { ...payload, category_id: categoryId, buy_price: buy, sell_price: sell, stock, track_stock: true };
+        payload = { ...payload, buy_price: buy, sell_price: sell, stock, track_stock: trackStock };
+        if (currentImageDataUrl) payload.image_data = currentImageDataUrl;
+      } else {
+        const categoryId = document.getElementById("item-category").value;
+        if (!categoryId) {
+          errorEl.textContent = "Choisis une catégorie.";
+          return;
+        }
+        const cat = mecanoCategories.find((c) => c.id === categoryId);
+        const isPrestation = cat && cat.type === "prestation";
+
+        if (isPrestation) {
+          const sell = Math.round(parseFloat(document.getElementById("item-sell-only").value));
+          if (isNaN(sell) || sell < 0) {
+            errorEl.textContent = "Indique un prix de vente valide.";
+            return;
+          }
+          payload = { ...payload, category_id: categoryId, buy_price: 0, sell_price: sell, stock: 0, track_stock: false };
+        } else {
+          const buy = Math.round(parseFloat(document.getElementById("item-buy").value));
+          const sell = Math.round(parseFloat(document.getElementById("item-sell").value));
+          const stock = parseInt(document.getElementById("item-stock").value, 10) || 0;
+          if (sell < buy) {
+            errorEl.textContent = "Le prix de vente ne peut pas être inférieur au prix d'achat.";
+            return;
+          }
+          payload = { ...payload, category_id: categoryId, buy_price: buy, sell_price: sell, stock, track_stock: true };
+        }
       }
-    }
 
-    if (editingId) payload.id = editingId;
+      if (editingId) payload.id = editingId;
 
-    try {
       await upsertItem(currentDomain, payload);
       toast(editingId ? "Article mis à jour." : "Article créé.", "success");
       resetForm();
       await refreshTable();
     } catch (err) {
       errorEl.textContent = "Erreur : " + err.message;
+      toast("Erreur : " + err.message, "error");
     }
   });
 
