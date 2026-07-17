@@ -264,6 +264,29 @@ function viewFileInNewTab(dataUrl, mimeType, fileName) {
   win.document.close();
 }
 
+// Palette fixe de 10 couleurs proposées pour les catégories Mécano
+const CATEGORY_COLOR_PALETTE = [
+  "#e5484d", // rouge
+  "#f2994a", // orange
+  "#e5c53d", // jaune
+  "#4caf50", // vert
+  "#26a69a", // sarcelle
+  "#4a90d9", // bleu
+  "#6366f1", // indigo
+  "#9b59b6", // violet
+  "#e0559a", // rose
+  "#8a8d93", // gris
+];
+
+function hexToRgba(hex, alpha) {
+  if (!hex) return `rgba(138,141,147,${alpha})`;
+  const clean = hex.replace("#", "");
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str ?? "";
