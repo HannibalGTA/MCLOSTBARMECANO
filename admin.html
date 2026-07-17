@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Administration — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260721b" />
+<link rel="stylesheet" href="assets/style.css?v=20260721c" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -273,11 +273,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260721b"></script>
-<script src="assets/auth.js?v=20260721b"></script>
-<script src="assets/helpers.js?v=20260721b"></script>
-<script src="assets/data.js?v=20260721b"></script>
-<script src="assets/export.js?v=20260721b"></script>
+<script src="assets/config.js?v=20260721c"></script>
+<script src="assets/auth.js?v=20260721c"></script>
+<script src="assets/helpers.js?v=20260721c"></script>
+<script src="assets/data.js?v=20260721c"></script>
+<script src="assets/export.js?v=20260721c"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
@@ -782,6 +782,7 @@
       toast(categoryEditingId ? "Catégorie mise à jour." : "Catégorie créée.", "success");
       resetCategoryForm();
       await loadMecanoCategories();
+      populateCatalogCategoryFilter();
       await refreshCategoriesTable();
       await refreshTable();
     } catch (err) {
@@ -848,6 +849,7 @@
           await deleteMecanoCategory(btn.dataset.id);
           toast("Catégorie supprimée.", "success");
           await loadMecanoCategories();
+          populateCatalogCategoryFilter();
           await refreshCategoriesTable();
           await refreshTable();
         } catch (err) {
@@ -872,6 +874,7 @@
       await updateMecanoCategory(a.id, { sort_order: swapIdx });
       await updateMecanoCategory(b.id, { sort_order: idx });
       await loadMecanoCategories();
+      populateCatalogCategoryFilter();
       await refreshCategoriesTable();
       await refreshTable();
     } catch (err) {
