@@ -384,6 +384,11 @@ body.theme-mecano .item-grid { grid-template-columns: repeat(auto-fill, minmax(9
 .item-card.compact .item-price {
   margin-top: 2px;
 }
+.item-card.compact .item-stock-badge {
+  top: -8px;
+  right: -8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
 
 /* ---------- Indicateur "mode modification" ---------- */
 .editing-highlight {
