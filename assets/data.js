@@ -15,7 +15,7 @@ function saleLinesTable(domain) {
 
 // ---------- ITEMS ----------
 async function listItems(domain, { onlyActive = false } = {}) {
-  let q = supabaseClient.from(itemsTable(domain)).select("*").order("name");
+  let q = supabaseClient.from(itemsTable(domain)).select("*").order("sort_order").order("name");
   if (onlyActive) q = q.eq("active", true);
   const { data, error } = await q;
   if (error) throw error;
@@ -238,5 +238,25 @@ async function getSetting(key, defaultValue) {
 
 async function setSetting(key, value) {
   const { error } = await supabaseClient.from("app_settings").upsert({ key, value: String(value), updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
+// ---------- PRIMES EXCEPTIONNELLES ----------
+async function listBonusPayments(domain) {
+  let q = supabaseClient.from("bonus_payments").select("*").order("paid_at", { ascending: false });
+  if (domain) q = q.eq("domain", domain);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+async function createBonusPayment(payment) {
+  const { data, error } = await supabaseClient.from("bonus_payments").insert(payment).select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteBonusPayment(id) {
+  const { error } = await supabaseClient.from("bonus_payments").delete().eq("id", id);
   if (error) throw error;
 }
