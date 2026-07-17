@@ -282,6 +282,11 @@ async function upsertMecanoCategory(category) {
   return data[0];
 }
 
+async function updateMecanoCategory(id, patch) {
+  const { error } = await supabaseClient.from("mecano_categories").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
 async function deleteMecanoCategory(id) {
   const { error } = await supabaseClient.from("mecano_categories").delete().eq("id", id);
   if (error) throw error;
