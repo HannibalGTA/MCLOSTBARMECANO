@@ -80,6 +80,35 @@ function dangerConfirmDialog(title, message, requiredText) {
   });
 }
 
+/**
+ * Popup d'information simple (un seul bouton "OK"). Renvoie une Promise qui se
+ * résout quand l'utilisateur ferme la popup.
+ */
+function alertDialog(title, message) {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "modal-backdrop";
+    backdrop.innerHTML = `
+      <div class="modal-box" style="max-width:420px;text-align:center;">
+        <h3 class="mt-0">${escapeHtml(title)}</h3>
+        <p class="muted">${escapeHtml(message)}</p>
+        <div style="margin-top:20px;">
+          <button type="button" class="btn-primary" id="alert-dialog-ok">OK</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+    function cleanup() {
+      backdrop.remove();
+      resolve();
+    }
+    backdrop.querySelector("#alert-dialog-ok").addEventListener("click", cleanup);
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) cleanup();
+    });
+  });
+}
+
 function formatDate(d) {
   const date = new Date(d);
   return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
