@@ -140,6 +140,35 @@ async function initBilan(domain) {
         }
       });
     });
+
+    renderSalesBySeller(sales);
+  }
+
+  function renderSalesBySeller(sales) {
+    const tbody = document.getElementById("sales-by-seller-tbody");
+    const empty = document.getElementById("sales-by-seller-empty");
+    if (!tbody) return;
+
+    const bySeller = {};
+    for (const sale of sales) {
+      const name = (sale.seller_name || "").trim() || "—";
+      bySeller[name] = bySeller[name] || { count: 0, total: 0 };
+      bySeller[name].count += 1;
+      bySeller[name].total += Number(sale.total);
+    }
+
+    const names = Object.keys(bySeller).sort((a, b) => bySeller[b].total - bySeller[a].total);
+    tbody.innerHTML = "";
+    empty.style.display = names.length ? "none" : "block";
+    for (const name of names) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(name)}</td>
+        <td class="num">${bySeller[name].count}</td>
+        <td class="num">${formatUSD(bySeller[name].total)}</td>
+      `;
+      tbody.appendChild(tr);
+    }
   }
 
   function openSaleModal(sale) {
