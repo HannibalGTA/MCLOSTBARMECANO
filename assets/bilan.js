@@ -70,7 +70,10 @@ async function initBilan(domain) {
   }
 
   async function refreshStock() {
-    const items = await listItems(domain);
+    const allItems = await listItems(domain);
+    // Côté Mécano, les articles "prestation" (sans stock) ne doivent pas apparaître
+    // du tout dans le stock — côté Bar, on garde l'affichage "Illimité" comme avant.
+    const items = domain === "mecano" ? allItems.filter((i) => i.track_stock) : allItems;
     const tbody = document.getElementById("stock-tbody");
     tbody.innerHTML = "";
     let stockValue = 0;
