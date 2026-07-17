@@ -295,7 +295,7 @@ async function deleteMecanoCategory(id) {
 async function listMecanoItemsWithCategory({ onlyActive = false } = {}) {
   let q = supabaseClient
     .from("mecano_items")
-    .select("*, category:mecano_categories(id, name, type)")
+    .select("*, category:mecano_categories(id, name, type, color)")
     .order("sort_order")
     .order("name");
   if (onlyActive) q = q.eq("active", true);
