@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Caisse Mécano — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260721a" />
+<link rel="stylesheet" href="assets/style.css?v=20260721b" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
@@ -115,11 +115,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260721a"></script>
-<script src="assets/auth.js?v=20260721a"></script>
-<script src="assets/helpers.js?v=20260721a"></script>
-<script src="assets/data.js?v=20260721a"></script>
-<script src="assets/invoice.js?v=20260721a"></script>
+<script src="assets/config.js?v=20260721b"></script>
+<script src="assets/auth.js?v=20260721b"></script>
+<script src="assets/helpers.js?v=20260721b"></script>
+<script src="assets/data.js?v=20260721b"></script>
+<script src="assets/invoice.js?v=20260721b"></script>
 <script>
   const domain = "mecano";
   let items = [];
@@ -180,6 +180,10 @@
       const isStockable = item.category ? item.category.type === "stockable" : item.track_stock;
       const card = document.createElement("div");
       card.className = "item-card compact" + (remaining <= 0 ? " out-of-stock" : "");
+      if (item.category && item.category.color) {
+        card.style.borderColor = item.category.color;
+        card.style.background = hexToRgba(item.category.color, 0.1);
+      }
       card.innerHTML = `
         ${isStockable ? `<div class="item-stock-badge">${item.stock}</div>` : ""}
         <div class="item-name">${escapeHtml(item.name)}</div>
@@ -197,7 +201,16 @@
       existing.quantity += 1;
       existing.line_total = existing.quantity * existing.unit_price;
     } else {
-      cart.push({ item_id: item.id, item_name: item.name, unit_price: item.sell_price, buy_price: item.buy_price, quantity: 1, line_total: item.sell_price, max_stock: item.track_stock ? item.stock : Infinity });
+      cart.push({
+        item_id: item.id,
+        item_name: item.name,
+        category_name: item.category ? item.category.name : null,
+        unit_price: item.sell_price,
+        buy_price: item.buy_price,
+        quantity: 1,
+        line_total: item.sell_price,
+        max_stock: item.track_stock ? item.stock : Infinity,
+      });
     }
     renderTicket();
     renderGrid();
