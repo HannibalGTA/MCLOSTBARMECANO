@@ -244,6 +244,7 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); }
 
 /* ---------- Item catalogue / cash register grid ---------- */
 .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+body.theme-mecano .item-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
 .item-card {
   background: var(--ink-soft);
   border: 1px solid var(--line);
@@ -361,6 +362,48 @@ td.num, th.num { text-align: right; font-family: var(--font-mono); }
   .grid-3 { grid-template-columns: 1fr; }
   table { font-size: 0.8rem; }
   .field-row { flex-direction: column; gap: 0; }
+}
+
+/* ---------- Tableau compact (catalogue/catégories avec beaucoup de lignes) ---------- */
+.table-compact thead th { padding: 6px 10px; font-size: 0.7rem; }
+.table-compact tbody td { padding: 5px 10px; font-size: 0.85rem; }
+.table-compact .btn-sm { padding: 3px 8px; font-size: 0.68rem; }
+
+/* ---------- Carte article compacte (mécano : pas d'image) ---------- */
+.item-card.compact {
+  padding: 8px 6px;
+}
+.item-card.compact .item-name {
+  font-size: 0.76rem;
+  line-height: 1.2;
+  min-height: 1.9em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.item-card.compact .item-price {
+  margin-top: 2px;
+}
+
+/* ---------- Indicateur "mode modification" ---------- */
+.editing-highlight {
+  border: 2px solid var(--accent) !important;
+  background: rgba(201,154,61,0.08);
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.15s ease;
+}
+.editing-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-left: 8px;
 }
 
 /* ---------- Utility ---------- */
