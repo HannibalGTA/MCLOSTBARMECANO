@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Salaires — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260717a" />
+<link rel="stylesheet" href="assets/style.css?v=20260719a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="theme-bar">
@@ -46,12 +46,41 @@
 
   <div class="card">
     <div class="card-title"><h2>Marge par vendeur — <span id="domain-label">Bar</span></h2></div>
-    <p class="muted" style="margin-top:-6px;font-size:0.82rem;">Si un total a été réduit manuellement en caisse, la marge par ligne n'en tient pas compte (légère surestimation possible). Change le % puis clique "Enregistrer le %" pour le sauvegarder.</p>
+    <p class="muted" style="margin-top:-6px;font-size:0.82rem;">Si un total a été réduit manuellement en caisse, la marge par ligne n'en tient pas compte (légère surestimation possible). Le "solde restant" retire automatiquement ce qui a déjà été versé sur une période chevauchante, pour éviter un double versement.</p>
     <table>
-      <thead><tr><th>Vendeur</th><th class="num">Marge générée</th><th class="num">%</th><th></th><th class="num">Salaire à verser</th><th></th></tr></thead>
+      <thead><tr><th>Vendeur</th><th class="num">Marge générée</th><th class="num">%</th><th></th><th class="num">Solde restant à verser</th><th></th></tr></thead>
       <tbody id="margins-tbody"></tbody>
     </table>
-    <div class="empty-state" id="margins-empty" style="display:none;">Aucune vente avec un nom de vendeur sur cette période.</div>
+    <div class="empty-state" id="margins-empty" style="display:none;">Aucune vente sur cette période.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><h2>Prime exceptionnelle — <span id="domain-label-3">Bar</span></h2></div>
+    <p class="muted" style="margin-top:-6px;">Verse un montant ponctuel à un vendeur, indépendamment de sa marge (ex : bon geste, événement RP...). Fonctionne comme un salaire : ajoute une dépense au bilan.</p>
+    <div class="grid-3">
+      <div>
+        <label for="bonus-seller">Nom du vendeur</label>
+        <input type="text" id="bonus-seller" placeholder="Ex : Jhon Doe" />
+      </div>
+      <div>
+        <label for="bonus-amount">Montant ($)</label>
+        <input type="number" id="bonus-amount" min="1" step="1" inputmode="numeric" />
+      </div>
+      <div>
+        <label for="bonus-reason">Motif (optionnel)</label>
+        <input type="text" id="bonus-reason" placeholder="Ex : Bon accueil client" />
+      </div>
+    </div>
+    <button class="btn-primary" id="bonus-pay-btn">Verser la prime</button>
+
+    <div class="card-title" style="margin-top:20px;"><h3 class="mt-0">Historique des primes — <span id="domain-label-4">Bar</span></h3></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Date</th><th>Vendeur</th><th>Motif</th><th class="num">Montant</th><th></th></tr></thead>
+        <tbody id="bonus-tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="bonus-empty" style="display:none;">Aucune prime versée.</div>
   </div>
 
   <div class="card">
@@ -67,22 +96,28 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260717a"></script>
-<script src="assets/auth.js?v=20260717a"></script>
-<script src="assets/helpers.js?v=20260717a"></script>
-<script src="assets/data.js?v=20260717a"></script>
+<script src="assets/config.js?v=20260719a"></script>
+<script src="assets/auth.js?v=20260719a"></script>
+<script src="assets/helpers.js?v=20260719a"></script>
+<script src="assets/data.js?v=20260719a"></script>
 <script>
+  const DEFAULT_PERCENTAGE = 60;
+
   let profile = null;
   let currentDomain = "bar";
   let currentFrom = null;
   let currentTo = null;
-  let marginsBySeller = {}; // normalizedKey -> margin
-  let percentagesBySeller = {}; // normalizedKey -> percentage
+  let marginsBySeller = {}; // normalizedKey -> marge brute de la période
+  let percentagesBySeller = {}; // normalizedKey -> pourcentage
   let displayNameByKey = {}; // normalizedKey -> nom tel qu'il apparaît le plus souvent
-  let existingPaymentsBySeller = {}; // normalizedKey -> [payments déjà versés pour ce service]
+  let existingPaymentsBySeller = {}; // normalizedKey -> [versements déjà faits pour ce service]
 
   function normalizeSellerKey(name) {
     return (name || "").trim().toLowerCase();
+  }
+
+  function fallbackSellerName(domain) {
+    return domain === "bar" ? "Barman" : "Mécano";
   }
 
   // Deux périodes se chevauchent-elles ? (null = borne ouverte, "depuis toujours" / "jusqu'à maintenant")
@@ -94,11 +129,22 @@
     return aStart <= bEnd && bStart <= aEnd;
   }
 
+  /** Marge déjà couverte par des versements sur une période qui chevauche celle sélectionnée. */
+  function alreadyCoveredMargin(key) {
+    return (existingPaymentsBySeller[key] || [])
+      .filter((p) => periodsOverlap(currentFrom, currentTo, p.period_from, p.period_to))
+      .reduce((s, p) => s + Number(p.margin_amount), 0);
+  }
+  function overlappingPayments(key) {
+    return (existingPaymentsBySeller[key] || []).filter((p) => periodsOverlap(currentFrom, currentTo, p.period_from, p.period_to));
+  }
+
   async function init() {
     profile = await requireRole(["gestionnaire"]);
     if (!profile) return;
     await recompute();
     await refreshPayments();
+    await refreshBonuses();
   }
 
   document.getElementById("tab-bar").addEventListener("click", () => switchDomain("bar"));
@@ -111,10 +157,13 @@
     const label = domain === "bar" ? "Bar" : "Mécano";
     document.getElementById("domain-label").textContent = label;
     document.getElementById("domain-label-2").textContent = label;
+    document.getElementById("domain-label-3").textContent = label;
+    document.getElementById("domain-label-4").textContent = label;
     document.body.className = domain === "bar" ? "theme-bar" : "theme-mecano";
     document.getElementById("page-logo").src = domain === "bar" ? "assets/MCbar.png" : "assets/MCmecano.png";
     await recompute();
     await refreshPayments();
+    await refreshBonuses();
   }
 
   document.getElementById("filter-apply").addEventListener("click", recompute);
@@ -153,8 +202,9 @@
     const nameCounts = {};
 
     for (const sale of sales) {
-      const raw = (sale.seller_name || "").trim();
-      if (!raw) continue;
+      // Si aucun pseudo n'a été saisi à la connexion, on regroupe quand même sous un nom
+      // par défaut ("Barman"/"Mécano") plutôt que d'ignorer la vente.
+      const raw = (sale.seller_name || "").trim() || fallbackSellerName(currentDomain);
       const key = normalizeSellerKey(raw);
 
       let margin = 0;
@@ -165,6 +215,19 @@
 
       nameCounts[key] = nameCounts[key] || {};
       nameCounts[key][raw] = (nameCounts[key][raw] || 0) + 1;
+    }
+
+    // Fait aussi apparaître les vendeurs qui ont déjà un versement enregistré sur cette
+    // période même s'ils n'ont pas de nouvelle vente (utile pour voir le solde à 0).
+    for (const key in existingPaymentsBySeller) {
+      if (!(key in marginsBySeller) && overlappingPayments(key).length > 0) {
+        marginsBySeller[key] = 0;
+        if (!displayNameByKey[key]) {
+          const p = existingPaymentsBySeller[key][0];
+          nameCounts[key] = nameCounts[key] || {};
+          nameCounts[key][p.seller_name] = 1;
+        }
+      }
     }
 
     for (const key in nameCounts) {
@@ -184,37 +247,36 @@
 
     for (const key of keys) {
       const seller = displayNameByKey[key];
-      const margin = marginsBySeller[key] || 0;
-      const pct = percentagesBySeller[key] !== undefined ? percentagesBySeller[key] : 10;
-      const salary = Math.round((margin * pct) / 100);
-
-      const overlapping = (existingPaymentsBySeller[key] || []).filter((p) =>
-        periodsOverlap(currentFrom, currentTo, p.period_from, p.period_to)
-      );
+      const grossMargin = marginsBySeller[key] || 0;
+      const pct = percentagesBySeller[key] !== undefined ? percentagesBySeller[key] : DEFAULT_PERCENTAGE;
+      const alreadyPaidMargin = alreadyCoveredMargin(key);
+      const remainingMargin = Math.max(0, grossMargin - alreadyPaidMargin);
+      const salary = Math.round((remainingMargin * pct) / 100);
+      const overlapping = overlappingPayments(key);
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${escapeHtml(seller)}</td>
-        <td class="num">${formatUSD(margin)}</td>
+        <td class="num">${formatUSD(grossMargin)}</td>
         <td class="num"><input type="number" min="0" max="100" step="1" inputmode="numeric" value="${pct}" data-pct-input="${escapeHtml(key)}" style="width:80px;margin-bottom:0;text-align:right;" /></td>
-        <td><button class="btn-ghost btn-sm" data-action="save-pct" data-key="${escapeHtml(key)}" data-seller="${escapeHtml(seller)}">Enregistrer le %</button></td>
+        <td><button class="btn-secondary btn-sm" data-action="save-pct" data-key="${escapeHtml(key)}" data-seller="${escapeHtml(seller)}" style="font-weight:700;">💾 Enregistrer le %</button></td>
         <td class="num" data-salary-cell="${escapeHtml(key)}">${formatUSD(salary)}</td>
-        <td><button class="btn-primary btn-sm" data-action="pay" data-key="${escapeHtml(key)}" data-seller="${escapeHtml(seller)}" ${salary <= 0 ? "disabled" : ""}>Verser le salaire</button></td>
+        <td><button class="btn-primary btn-sm" data-action="pay" data-key="${escapeHtml(key)}" data-seller="${escapeHtml(seller)}" ${salary <= 0 ? "disabled" : ""}>Verser le solde</button></td>
       `;
       tbody.appendChild(tr);
 
       if (overlapping.length > 0) {
-        const infoTr = document.createElement("tr");
         const details = overlapping
           .map((p) => {
             const period = p.period_from || p.period_to ? `du ${p.period_from ? formatDate(p.period_from) : "…"} au ${p.period_to ? formatDate(p.period_to) : "…"}` : "sur toute la période";
-            return `${formatUSD(p.amount)} versé le ${formatDateTime(p.paid_at)} (${period})`;
+            return `${formatUSD(p.amount)} (marge de ${formatUSD(p.margin_amount)}) versé le ${formatDateTime(p.paid_at)} (${period})`;
           })
           .join(" · ");
+        const infoTr = document.createElement("tr");
         infoTr.innerHTML = `
           <td colspan="6" style="padding-top:0;padding-bottom:12px;">
             <div style="font-size:0.8rem;color:var(--brass);background:rgba(201,154,61,0.1);border:1px solid var(--brass);border-radius:4px;padding:6px 10px;">
-              ℹ️ Un salaire a déjà été versé à ${escapeHtml(seller)} sur une période qui chevauche celle sélectionnée : ${details}
+              ℹ️ Déjà versé à ${escapeHtml(seller)} sur une période chevauchante : ${details}. Le solde restant ci-dessus en tient déjà compte automatiquement.
             </div>
           </td>
         `;
@@ -226,8 +288,9 @@
       input.addEventListener("input", () => {
         const key = input.dataset.pctInput;
         const pct = Math.max(0, Math.min(100, Math.round(parseFloat(input.value)) || 0));
-        const margin = marginsBySeller[key] || 0;
-        const salary = Math.round((margin * pct) / 100);
+        const grossMargin = marginsBySeller[key] || 0;
+        const remainingMargin = Math.max(0, grossMargin - alreadyCoveredMargin(key));
+        const salary = Math.round((remainingMargin * pct) / 100);
         const cell = tbody.querySelector(`[data-salary-cell="${cssEscape(key)}"]`);
         if (cell) cell.textContent = formatUSD(salary);
         const payBtn = tbody.querySelector(`[data-action="pay"][data-key="${cssEscape(key)}"]`);
@@ -262,30 +325,27 @@
   }
 
   async function paySalary(key, displayName) {
-    const margin = marginsBySeller[key] || 0;
-    const pct = percentagesBySeller[key] !== undefined ? percentagesBySeller[key] : 10;
-    const salary = Math.round((margin * pct) / 100);
+    const grossMargin = marginsBySeller[key] || 0;
+    const pct = percentagesBySeller[key] !== undefined ? percentagesBySeller[key] : DEFAULT_PERCENTAGE;
+    const alreadyPaidMargin = alreadyCoveredMargin(key);
+    const remainingMargin = Math.max(0, grossMargin - alreadyPaidMargin);
+    const salary = Math.round((remainingMargin * pct) / 100);
     if (salary <= 0) return;
 
     const domainLabel = currentDomain === "bar" ? "Bar" : "Mécano";
     const fromLabel = currentFrom ? formatDate(currentFrom) : "le début";
     const toLabel = currentTo ? formatDate(currentTo) : "aujourd'hui";
 
-    const overlapping = (existingPaymentsBySeller[key] || []).filter((p) => periodsOverlap(currentFrom, currentTo, p.period_from, p.period_to));
-    const warningLine =
-      overlapping.length > 0
-        ? ` ⚠ Attention : ${overlapping.length} versement(s) existent déjà pour ${displayName} sur une période qui chevauche celle-ci (total déjà versé : ${formatUSD(overlapping.reduce((s, p) => s + Number(p.amount), 0))}).`
-        : "";
+    const infoLine = alreadyPaidMargin > 0 ? ` (le solde déjà versé sur cette période a été déduit automatiquement)` : "";
 
     const confirmed = await confirmDialog(
       "Confirmer le versement",
-      `Verser ${formatUSD(salary)} à ${displayName} (${domainLabel}) pour la période du ${fromLabel} au ${toLabel} ? Cette somme sera enregistrée comme dépense dans le bilan ${domainLabel}.${warningLine}`
+      `Verser ${formatUSD(salary)} à ${displayName} (${domainLabel}) pour la période du ${fromLabel} au ${toLabel} ?${infoLine} Cette somme sera enregistrée comme dépense dans le bilan ${domainLabel}.`
     );
     if (!confirmed) return;
 
     let purchase = null;
     try {
-      // 1) Crée d'abord la dépense dans le bilan comptable du service concerné
       const periodLabel = `${fromLabel} au ${toLabel}`;
       purchase = await createPurchase(
         {
@@ -306,13 +366,12 @@
         ]
       );
 
-      // 2) Puis le versement de salaire, lié à cette dépense (les deux se suppriment ensemble ensuite)
       await createSalaryPayment({
         seller_name: displayName,
         domain: currentDomain,
         period_from: currentFrom,
         period_to: currentTo,
-        margin_amount: Math.round(margin),
+        margin_amount: Math.round(remainingMargin),
         percentage: pct,
         amount: salary,
         purchase_id: purchase.id,
@@ -321,15 +380,13 @@
       });
 
       toast("Salaire versé, enregistré et ajouté au bilan " + domainLabel + ".", "success");
+      await recompute();
       await refreshPayments();
     } catch (err) {
-      // Si le versement échoue après coup, on retire la dépense créée pour ne rien laisser en double
       if (purchase) {
         try {
           await deletePurchase(purchase.id);
-        } catch (cleanupErr) {
-          // on laisse l'erreur d'origine remonter même si le nettoyage échoue
-        }
+        } catch (cleanupErr) {}
       }
       toast("Erreur : " + err.message, "error");
     }
@@ -371,7 +428,110 @@
         try {
           await deleteSalaryPayment(btn.dataset.id);
           toast("Versement supprimé.", "success");
+          await recompute();
           await refreshPayments();
+        } catch (err) {
+          toast("Erreur : " + err.message, "error");
+        }
+      });
+    });
+  }
+
+  // ---------- PRIME EXCEPTIONNELLE ----------
+  document.getElementById("bonus-pay-btn").addEventListener("click", async () => {
+    const seller = document.getElementById("bonus-seller").value.trim();
+    const amount = Math.round(parseFloat(document.getElementById("bonus-amount").value));
+    const reason = document.getElementById("bonus-reason").value.trim();
+
+    if (!seller) return toast("Indique le nom du vendeur.", "error");
+    if (!amount || amount <= 0) return toast("Indique un montant valide.", "error");
+
+    const domainLabel = currentDomain === "bar" ? "Bar" : "Mécano";
+    const confirmed = await confirmDialog(
+      "Confirmer la prime",
+      `Verser une prime exceptionnelle de ${formatUSD(amount)} à ${seller} (${domainLabel}) ? Cette somme sera enregistrée comme dépense dans le bilan ${domainLabel}.`
+    );
+    if (!confirmed) return;
+
+    const btn = document.getElementById("bonus-pay-btn");
+    btn.disabled = true;
+    btn.textContent = "Enregistrement...";
+    let purchase = null;
+    try {
+      purchase = await createPurchase(
+        {
+          domain: currentDomain,
+          buyer_id: profile.id,
+          note: `Prime exceptionnelle à ${seller}${reason ? " — " + reason : ""}`,
+          purchase_date: new Date().toISOString(),
+        },
+        [
+          {
+            domain: currentDomain,
+            item_id: null,
+            label: `Prime — ${seller}`,
+            unit_price: amount,
+            quantity: 1,
+            line_total: amount,
+          },
+        ]
+      );
+
+      await createBonusPayment({
+        seller_name: seller,
+        domain: currentDomain,
+        amount,
+        reason: reason || null,
+        purchase_id: purchase.id,
+        paid_by: profile.id,
+        paid_at: new Date().toISOString(),
+      });
+
+      toast("Prime versée et ajoutée au bilan " + domainLabel + ".", "success");
+      document.getElementById("bonus-seller").value = "";
+      document.getElementById("bonus-amount").value = "";
+      document.getElementById("bonus-reason").value = "";
+      await refreshBonuses();
+    } catch (err) {
+      if (purchase) {
+        try {
+          await deletePurchase(purchase.id);
+        } catch (cleanupErr) {}
+      }
+      toast("Erreur : " + err.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Verser la prime";
+    }
+  });
+
+  async function refreshBonuses() {
+    const bonuses = await listBonusPayments(currentDomain);
+    const tbody = document.getElementById("bonus-tbody");
+    const empty = document.getElementById("bonus-empty");
+    tbody.innerHTML = "";
+    empty.style.display = bonuses.length ? "none" : "block";
+
+    for (const b of bonuses) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${formatDateTime(b.paid_at)}</td>
+        <td>${escapeHtml(b.seller_name)}</td>
+        <td>${escapeHtml(b.reason || "—")}</td>
+        <td class="num">${formatUSD(b.amount)}</td>
+        <td><button class="btn-danger btn-sm" data-action="delete-bonus" data-id="${b.id}">Supprimer</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    tbody.querySelectorAll('[data-action="delete-bonus"]').forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const confirmed = await confirmDialog("Supprimer cette prime", "Supprimer cette prime ? La dépense correspondante dans le bilan sera supprimée automatiquement avec.");
+        if (!confirmed) return;
+        try {
+          await deleteBonusPayment(btn.dataset.id);
+          toast("Prime supprimée.", "success");
+          await refreshBonuses();
         } catch (err) {
           toast("Erreur : " + err.message, "error");
         }
