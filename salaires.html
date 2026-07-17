@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Salaires — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260719c" />
+<link rel="stylesheet" href="assets/style.css?v=20260719d" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="theme-bar">
@@ -96,10 +96,10 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260719c"></script>
-<script src="assets/auth.js?v=20260719c"></script>
-<script src="assets/helpers.js?v=20260719c"></script>
-<script src="assets/data.js?v=20260719c"></script>
+<script src="assets/config.js?v=20260719d"></script>
+<script src="assets/auth.js?v=20260719d"></script>
+<script src="assets/helpers.js?v=20260719d"></script>
+<script src="assets/data.js?v=20260719d"></script>
 <script>
   const DEFAULT_PERCENTAGE = 60;
 
@@ -314,7 +314,20 @@
     });
 
     tbody.querySelectorAll('[data-action="pay"]').forEach((btn) => {
-      btn.addEventListener("click", () => paySalary(btn.dataset.key, btn.dataset.seller));
+      btn.addEventListener("click", async () => {
+        const key = btn.dataset.key;
+        const input = tbody.querySelector(`[data-pct-input="${cssEscape(key)}"]`);
+        const typedPct = Math.max(0, Math.min(100, Math.round(parseFloat(input.value)) || 0));
+        const savedPct = percentagesBySeller[key] !== undefined ? percentagesBySeller[key] : DEFAULT_PERCENTAGE;
+        if (typedPct !== savedPct) {
+          await alertDialog(
+            "Enregistre le % d'abord",
+            `Le % affiché (${typedPct}%) n'a pas encore été enregistré (le % actuellement sauvegardé est ${savedPct}%). Clique sur "Enregistrer le %" avant de verser, sinon le versement se baserait sur l'ancienne valeur.`
+          );
+          return;
+        }
+        paySalary(key, btn.dataset.seller);
+      });
     });
   }
 
