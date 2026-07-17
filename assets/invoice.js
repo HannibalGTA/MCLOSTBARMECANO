@@ -26,14 +26,44 @@ function showInvoiceModal(data) {
   document.getElementById("inv-plate").textContent = data.plate || "—";
 
   const tbody = document.getElementById("inv-lines");
-  tbody.innerHTML = (data.lines || [])
-    .map(
-      (l) =>
-        `<tr><td>${escapeHtml(l.item_name)}</td><td class="num">${l.quantity}</td><td class="num">${formatUSD(l.unit_price)}</td><td class="num">${formatUSD(l.line_total)}</td></tr>`
-    )
-    .join("");
+  const lines = data.lines || [];
+  const hasCategories = lines.some((l) => l.category_name);
 
-  const subtotal = (data.lines || []).reduce((s, l) => s + Number(l.line_total), 0);
+  if (hasCategories) {
+    // Regroupe les lignes par catégorie, dans l'ordre de première apparition
+    const groups = [];
+    const groupByName = {};
+    for (const l of lines) {
+      const key = l.category_name || "Autres";
+      if (!groupByName[key]) {
+        groupByName[key] = [];
+        groups.push(key);
+      }
+      groupByName[key].push(l);
+    }
+    tbody.innerHTML = groups
+      .map(
+        (name) => `
+        <tr><td colspan="4" style="font-weight:700;padding-top:12px;border-bottom:1px solid #ccc0a5;">${escapeHtml(name)}</td></tr>
+        ${groupByName[name]
+          .map(
+            (l) =>
+              `<tr><td>${escapeHtml(l.item_name)}</td><td class="num">${l.quantity}</td><td class="num">${formatUSD(l.unit_price)}</td><td class="num">${formatUSD(l.line_total)}</td></tr>`
+          )
+          .join("")}
+      `
+      )
+      .join("");
+  } else {
+    tbody.innerHTML = lines
+      .map(
+        (l) =>
+          `<tr><td>${escapeHtml(l.item_name)}</td><td class="num">${l.quantity}</td><td class="num">${formatUSD(l.unit_price)}</td><td class="num">${formatUSD(l.line_total)}</td></tr>`
+      )
+      .join("");
+  }
+
+  const subtotal = lines.reduce((s, l) => s + Number(l.line_total), 0);
   const total = data.total !== undefined && data.total !== null ? data.total : subtotal;
   const discount = Math.max(0, Math.round(subtotal - total));
 
