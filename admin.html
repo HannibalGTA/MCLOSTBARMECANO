@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Administration — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260720d" />
+<link rel="stylesheet" href="assets/style.css?v=20260721a" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -35,8 +35,9 @@
   </div>
 
   <div class="card" id="mecano-categories-card" style="display:none;">
-    <div class="card-title"><h2>Catégories Mécano</h2></div>
+    <div class="card-title"><h2 id="category-form-title">Catégories Mécano</h2></div>
     <p class="muted" style="margin-top:-6px;">Une catégorie "prestation" force ses articles en "sans stock" (ex : main d'œuvre, vidange). Une catégorie "stockable" suit le stock et le prix d'achat.</p>
+    <div id="category-form-box">
     <form id="category-form">
       <input type="hidden" id="category-id" />
       <div class="field-row" style="align-items:flex-end;">
@@ -58,7 +59,8 @@
       </div>
       <div class="login-error" id="category-form-error"></div>
     </form>
-    <table>
+    </div>
+    <table class="table-compact">
       <thead><tr><th></th><th>Nom</th><th>Type</th><th></th></tr></thead>
       <tbody id="categories-tbody"></tbody>
     </table>
@@ -127,10 +129,10 @@
       <div class="card-title"><h2>Catalogue — <span id="catalog-domain-label">Bar</span></h2></div>
       <div id="catalog-category-filter-wrap" style="display:none;margin-bottom:14px;">
         <label for="catalog-category-filter">Filtrer par catégorie</label>
-        <select id="catalog-category-filter"><option value="">Toutes les catégories</option></select>
+        <select id="catalog-category-filter"></select>
       </div>
       <div id="items-table-wrap">
-        <table>
+        <table id="items-table">
           <thead id="items-thead">
             <tr><th></th><th></th><th>Nom</th><th class="num">Achat</th><th class="num">Vente</th><th class="num">Stock</th><th></th></tr>
           </thead>
@@ -268,11 +270,11 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260720d"></script>
-<script src="assets/auth.js?v=20260720d"></script>
-<script src="assets/helpers.js?v=20260720d"></script>
-<script src="assets/data.js?v=20260720d"></script>
-<script src="assets/export.js?v=20260720d"></script>
+<script src="assets/config.js?v=20260721a"></script>
+<script src="assets/auth.js?v=20260721a"></script>
+<script src="assets/helpers.js?v=20260721a"></script>
+<script src="assets/data.js?v=20260721a"></script>
+<script src="assets/export.js?v=20260721a"></script>
 <script>
   let currentDomain = "bar";
   let currentImageDataUrl = null;
@@ -553,10 +555,12 @@
   function populateCatalogCategoryFilter() {
     const select = document.getElementById("catalog-category-filter");
     const current = select.value;
-    select.innerHTML =
-      '<option value="">Toutes les catégories</option>' +
-      mecanoCategories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
-    select.value = current;
+    select.innerHTML = mecanoCategories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+    if (mecanoCategories.some((c) => c.id === current)) {
+      select.value = current;
+    } else if (mecanoCategories.length) {
+      select.value = mecanoCategories[0].id;
+    }
   }
   document.getElementById("catalog-category-filter").addEventListener("change", refreshTable);
 
@@ -567,6 +571,7 @@
     const thead = document.getElementById("items-thead");
 
     if (currentDomain === "bar") {
+      document.getElementById("items-table").classList.remove("table-compact");
       thead.innerHTML = `<tr><th></th><th></th><th>Nom</th><th class="num">Achat</th><th class="num">Vente</th><th class="num">Stock</th><th></th></tr>`;
       const items = await listItems("bar");
       tbody.innerHTML = "";
@@ -595,33 +600,37 @@
       }
       wireItemRowActions(tbody, items);
     } else {
-      thead.innerHTML = `<tr><th></th><th>Nom</th><th>Catégorie</th><th class="num">Achat</th><th class="num">Vente</th><th class="num">Stock</th><th></th></tr>`;
-      const allItems = await listMecanoItemsWithCategory();
+      document.getElementById("items-table").classList.add("table-compact");
       const filterValue = document.getElementById("catalog-category-filter").value;
+      const filterCategory = mecanoCategories.find((c) => c.id === filterValue);
+      const filterIsPrestation = filterCategory && filterCategory.type === "prestation";
+
+      // Prestation : ni Catégorie, ni Achat, ni Stock (toujours "—" de toute façon, puisque
+      // toutes les lignes affichées appartiennent à la même catégorie filtrée).
+      thead.innerHTML = filterIsPrestation
+        ? `<tr><th></th><th>Nom</th><th class="num">Vente</th><th></th></tr>`
+        : `<tr><th></th><th>Nom</th><th class="num">Achat</th><th class="num">Vente</th><th class="num">Stock</th><th></th></tr>`;
+
+      const allItems = await listMecanoItemsWithCategory();
       const items = filterValue ? allItems.filter((i) => i.category_id === filterValue) : allItems;
       tbody.innerHTML = "";
       empty.style.display = items.length ? "none" : "block";
 
       for (const [idx, item] of items.entries()) {
-        const isPrestation = item.category && item.category.type === "prestation";
         const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>
-            <div style="display:flex;flex-direction:column;gap:2px;">
-              <button class="btn-ghost btn-sm" data-action="move-up" data-id="${item.id}" ${idx === 0 ? "disabled" : ""} title="Monter">▲</button>
-              <button class="btn-ghost btn-sm" data-action="move-down" data-id="${item.id}" ${idx === items.length - 1 ? "disabled" : ""} title="Descendre">▼</button>
-            </div>
-          </td>
-          <td>${escapeHtml(item.name)} ${!item.active ? '<span class="badge muted" style="border:1px solid #444;">inactif</span>' : ""}</td>
-          <td>${item.category ? escapeHtml(item.category.name) : '<span class="muted">Sans catégorie</span>'}</td>
-          <td class="num">${isPrestation ? '<span class="muted">—</span>' : formatUSD(item.buy_price)}</td>
-          <td class="num">${formatUSD(item.sell_price)}</td>
-          <td class="num">${isPrestation ? '<span class="muted">—</span>' : item.stock}</td>
-          <td>
-            <button class="btn-ghost btn-sm" data-action="edit" data-id="${item.id}">Modifier</button>
-            <button class="btn-danger btn-sm" data-action="delete" data-id="${item.id}">Supprimer</button>
-          </td>
-        `;
+        const moveButtons = `
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <button class="btn-ghost btn-sm" data-action="move-up" data-id="${item.id}" ${idx === 0 ? "disabled" : ""} title="Monter">▲</button>
+            <button class="btn-ghost btn-sm" data-action="move-down" data-id="${item.id}" ${idx === items.length - 1 ? "disabled" : ""} title="Descendre">▼</button>
+          </div>`;
+        const nameCell = `${escapeHtml(item.name)} ${!item.active ? '<span class="badge muted" style="border:1px solid #444;">inactif</span>' : ""}`;
+        const actionsCell = `
+          <button class="btn-ghost btn-sm" data-action="edit" data-id="${item.id}">Modifier</button>
+          <button class="btn-danger btn-sm" data-action="delete" data-id="${item.id}">Supprimer</button>`;
+
+        tr.innerHTML = filterIsPrestation
+          ? `<td>${moveButtons}</td><td>${nameCell}</td><td class="num">${formatUSD(item.sell_price)}</td><td>${actionsCell}</td>`
+          : `<td>${moveButtons}</td><td>${nameCell}</td><td class="num">${formatUSD(item.buy_price)}</td><td class="num">${formatUSD(item.sell_price)}</td><td class="num">${item.stock}</td><td>${actionsCell}</td>`;
         tbody.appendChild(tr);
       }
 
@@ -721,6 +730,8 @@
     document.getElementById("category-id").value = "";
     document.getElementById("category-cancel-edit").style.display = "none";
     document.getElementById("category-form-error").textContent = "";
+    document.getElementById("category-form-title").innerHTML = "Catégories Mécano";
+    document.getElementById("category-form-box").classList.remove("editing-highlight");
   }
 
   document.getElementById("category-form").addEventListener("submit", async (e) => {
@@ -790,6 +801,8 @@
         document.getElementById("category-name").value = cat.name;
         document.getElementById("category-type").value = cat.type;
         document.getElementById("category-cancel-edit").style.display = "inline-block";
+        document.getElementById("category-form-title").innerHTML = `Modifier — ${escapeHtml(cat.name)} <span class="editing-badge">Modification</span>`;
+        document.getElementById("category-form-box").classList.add("editing-highlight");
         document.getElementById("category-name").scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
