@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Salaires — The Lost MC</title>
-<link rel="stylesheet" href="assets/style.css?v=20260719d" />
+<link rel="stylesheet" href="assets/style.css?v=20260722b" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="theme-bar">
@@ -54,6 +54,24 @@
     <div class="empty-state" id="margins-empty" style="display:none;">Aucune vente sur cette période.</div>
   </div>
 
+  <div class="card" id="fixed-salary-card" style="display:none;">
+    <div class="card-title"><h2>Salaire fixe — Mécano</h2></div>
+    <p class="muted" style="margin-top:-6px;">Verse un salaire fixe (indépendant de la marge) à un employé du garage, pour la période sélectionnée en haut de page.</p>
+    <div class="grid-3">
+      <div>
+        <label for="fixed-salary-employee">Nom de l'employé</label>
+        <input type="text" id="fixed-salary-employee" placeholder="Ex : Jhon Doe" />
+      </div>
+      <div>
+        <label for="fixed-salary-amount">Montant du salaire ($)</label>
+        <input type="number" id="fixed-salary-amount" min="1" step="1" inputmode="numeric" />
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <button class="btn-primary" id="fixed-salary-pay-btn" style="width:100%;margin-bottom:14px;">Verser le salaire fixe</button>
+      </div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-title"><h2>Prime exceptionnelle — <span id="domain-label-3">Bar</span></h2></div>
     <p class="muted" style="margin-top:-6px;">Verse un montant ponctuel à un vendeur, indépendamment de sa marge (ex : bon geste, événement RP...). Fonctionne comme un salaire : ajoute une dépense au bilan.</p>
@@ -96,10 +114,10 @@
   </div>
 </div>
 
-<script src="assets/config.js?v=20260719d"></script>
-<script src="assets/auth.js?v=20260719d"></script>
-<script src="assets/helpers.js?v=20260719d"></script>
-<script src="assets/data.js?v=20260719d"></script>
+<script src="assets/config.js?v=20260722b"></script>
+<script src="assets/auth.js?v=20260722b"></script>
+<script src="assets/helpers.js?v=20260722b"></script>
+<script src="assets/data.js?v=20260722b"></script>
 <script>
   const DEFAULT_PERCENTAGE = 60;
 
@@ -159,6 +177,7 @@
     document.getElementById("domain-label-4").textContent = label;
     document.body.className = domain === "bar" ? "theme-bar" : "theme-mecano";
     document.getElementById("page-logo").src = domain === "bar" ? "assets/MCbar.png" : "assets/MCmecano.png";
+    document.getElementById("fixed-salary-card").style.display = domain === "mecano" ? "block" : "none";
     await recompute();
     await refreshPayments();
     await refreshBonuses();
@@ -416,13 +435,14 @@
 
     for (const p of payments) {
       const period = p.period_from || p.period_to ? `${p.period_from ? formatDate(p.period_from) : "…"} → ${p.period_to ? formatDate(p.period_to) : "…"}` : "Toute la période";
+      const isFixed = p.percentage === null || p.percentage === undefined;
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${formatDateTime(p.paid_at)}</td>
         <td>${escapeHtml(p.seller_name || p.employee_name || "—")}</td>
         <td>${period}</td>
-        <td class="num">${formatUSD(p.margin_amount)}</td>
-        <td class="num">${p.percentage}%</td>
+        <td class="num">${isFixed ? '<span class="muted">Salaire fixe</span>' : formatUSD(p.margin_amount)}</td>
+        <td class="num">${isFixed ? '<span class="muted">—</span>' : p.percentage + "%"}</td>
         <td class="num">${formatUSD(p.amount)}</td>
         <td><button class="btn-danger btn-sm" data-action="delete" data-id="${p.id}">Supprimer</button></td>
       `;
@@ -447,6 +467,77 @@
       });
     });
   }
+
+  // ---------- SALAIRE FIXE (Mécano uniquement) ----------
+  document.getElementById("fixed-salary-pay-btn").addEventListener("click", async () => {
+    const employee = document.getElementById("fixed-salary-employee").value.trim();
+    const amount = Math.round(parseFloat(document.getElementById("fixed-salary-amount").value));
+
+    if (!employee) return toast("Indique le nom de l'employé.", "error");
+    if (!amount || amount <= 0) return toast("Indique un montant valide.", "error");
+
+    const fromLabel = currentFrom ? formatDate(currentFrom) : "le début";
+    const toLabel = currentTo ? formatDate(currentTo) : "aujourd'hui";
+    const confirmed = await confirmDialog(
+      "Confirmer le salaire fixe",
+      `Verser un salaire fixe de ${formatUSD(amount)} à ${employee} pour la période du ${fromLabel} au ${toLabel} ? Cette somme sera enregistrée comme dépense dans le bilan Mécano.`
+    );
+    if (!confirmed) return;
+
+    const btn = document.getElementById("fixed-salary-pay-btn");
+    btn.disabled = true;
+    btn.textContent = "Enregistrement...";
+    let purchase = null;
+    try {
+      const periodLabel = `${fromLabel} au ${toLabel}`;
+      purchase = await createPurchase(
+        {
+          domain: "mecano",
+          buyer_id: profile.id,
+          note: `Salaire fixe versé à ${employee} (période du ${periodLabel})`,
+          purchase_date: new Date().toISOString(),
+        },
+        [
+          {
+            domain: "mecano",
+            item_id: null,
+            label: `Salaire fixe — ${employee}`,
+            unit_price: amount,
+            quantity: 1,
+            line_total: amount,
+          },
+        ]
+      );
+
+      await createSalaryPayment({
+        seller_name: employee,
+        domain: "mecano",
+        period_from: currentFrom,
+        period_to: currentTo,
+        margin_amount: 0,
+        percentage: null,
+        amount,
+        purchase_id: purchase.id,
+        paid_by: profile.id,
+        paid_at: new Date().toISOString(),
+      });
+
+      toast("Salaire fixe versé et ajouté au bilan Mécano.", "success");
+      document.getElementById("fixed-salary-employee").value = "";
+      document.getElementById("fixed-salary-amount").value = "";
+      await refreshPayments();
+    } catch (err) {
+      if (purchase) {
+        try {
+          await deletePurchase(purchase.id);
+        } catch (cleanupErr) {}
+      }
+      toast("Erreur : " + err.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Verser le salaire fixe";
+    }
+  });
 
   // ---------- PRIME EXCEPTIONNELLE ----------
   document.getElementById("bonus-pay-btn").addEventListener("click", async () => {
